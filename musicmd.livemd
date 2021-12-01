@@ -1,0 +1,82 @@
+# Music & Markdown
+
+## Setup
+
+```elixir
+import IEx.Helpers
+```
+
+## Section
+
+```elixir
+music = """
+G       D     G       D
+Oh, the summertime is coming
+        G                 D
+And the trees are sweetly blooming
+"""
+```
+
+So how do we take that and create an understanding of what is what?
+
+We could start by getting each token and finding its starting index in its line.
+
+```elixir
+defmodule Music do
+  def line_to_tokens(line) when is_binary(line) do
+    line |> String.split(~R/\s+/, include_captures: true) |> line_to_tokens()
+  end
+
+  def line_to_tokens(chunks) when is_binary(hd(chunks)) do
+    chunks
+    |> Enum.reduce([], &reduce_tokens/2)
+    |> Enum.reverse()
+    |> Enum.reject(fn {token, _} -> String.trim(token) == "" end)
+  end
+
+  def reduce_tokens(token, []) when is_binary(token) do
+    [{token, 0}]
+  end
+
+  def reduce_tokens(token, [{last_token, index} | _] = acc) when is_binary(token) do
+    [{token, String.length(last_token) + index} | acc]
+  end
+
+  def string_to_token_positions(str) when is_binary(str) do
+    str
+    |> String.split("\n")
+    |> Enum.map(&line_to_tokens/1)
+  end
+end
+
+Music.string_to_token_positions(music)
+```
+
+We also need to identify pairs of lines where one is chords and the other is lyrics. Not all chord lines have an accompanying lyric line, and not all lyric lines have an accompanying chord line... but for now, let's keep it easy.
+
+```elixir
+music = """
+D      G       D
+Oh the summer time is comin'
+        G                 F#m
+And the trees are sweetly bloomin'
+        G    A        Bm
+And the wild mountain thyme
+       G         Em       G
+grows around the bloomin' heather
+
+        D   G       D
+Will ye go, lassie, go?
+          G        F#m
+And we'll all go together
+         G    A        Bm
+To pluck wild mountain thyme
+       G         Em       G
+Grows around the bloomin' heather
+        D   G       D
+Will ye go, lassie, go?
+"""
+
+Music.string_to_token_positions(music)
+|> Enum.chunk()
+```
