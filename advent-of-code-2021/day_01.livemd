@@ -1,0 +1,299 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# Advent of Code 2021 - day 1
+
+## Setup
+
+```elixir
+measurements = File.read!("./advent-of-code-2021/day_01_input.txt")
+```
+
+```output
+"134\n138\n142\n143\n141\n142\n145\n140\n144\n156\n158\n163\n164\n170\n192\n193\n194\n218\n216\n229\n210\n212\n217\n219\n252\n254\n253\n256\n257\n258\n259\n270\n271\n273\n289\n314\n289\n315\n321\n330\n331\n307\n316\n325\n326\n330\n344\n347\n330\n342\n344\n337\n338\n341\n345\n347\n364\n394\n395\n418\n421\n422\n425\n426\n434\n432\n442\n443\n445\n446\n459\n460\n469\n464\n449\n466\n484\n485\n488\n489\n495\n499\n501\n504\n505\n508\n520\n530\n535\n537\n533\n534\n538\n539\n542\n544\n545\n546\n547\n565\n566\n579\n586\n596\n601\n602\n615\n623\n625\n626\n641\n645\n654\n657\n659\n658\n661\n678\n680\n682\n673\n682\n686\n689\n694\n704\n705\n706\n734\n735\n741\n746\n747\n756\n772\n773\n806\n807\n819\n820\n824\n837\n835\n837\n834\n842\n844\n860\n855\n862\n863\n873\n898\n904\n908\n909\n910\n911\n921\n922\n928\n930\n943\n949\n951\n947\n953\n963\n965\n967\n970\n975\n976\n979\n986\n1009\n1017\n1021\n1022\n1047\n1073\n1075\n1100\n1101\n1136\n1143\n1149\n1148\n1149\n1150\n1154\n1167\n1169\n1175\n1178\n1181\n1191\n1194\n1195\n1196\n1203\n1204\n1188\n1196\n1197\n1198\n1211\n1213\n1221\n1225\n1227\n1232\n1233\n1244\n1245\n1251\n1252\n1253\n1254\n1281\n1292\n1293\n1296\n1306\n1320\n1312\n1313\n1318\n1319\n1322\n1323\n1324\n1344\n1345\n1348\n1354\n1357\n1356\n1359\n1360\n1362\n1363\n1364\n1366\n1384\n1388\n1389\n1388\n1390\n1391\n1412\n1415\n1416\n1415\n1414\n1424\n1429\n1430\n1453\n1459\n1470\n1472\n1491\n1494\n1499\n1497\n1498\n1491\n1496\n1497\n1496\n1523\n1527\n1532\n1525\n1555\n1559\n1576\n1586\n1593\n1609\n1610\n1612\n1619\n1645\n1650\n1657\n1677\n1705\n1706\n1709\n1713\n1722\n1737\n1773\n1783\n1795\n1796\n1807\n1806\n1807\n1808\n1828\n1829\n1835\n1837\n1845\n1848\n1847\n1854\n1862\n1860\n1861\n1862\n1863\n1868\n1882\n1892\n1904\n1876\n1875\n1877\n1907\n1922\n1936\n1932\n1938\n1948\n1950\n1953\n1955\n1957\n1958\n1956\n1961\n1966\n1964\n1968\n1987\n1984\n1988\n1990\n1991\n2009\n2012\n2018\n2022\n2041\n2042\n2057\n2058\n2056\n2064\n2070\n2073\n2077\n2080\n2041\n2044\n2042\n2045\n2053\n2052\n2054\n2055\n2058\n2064\n2068\n2067\n2078\n2086\n2085\n2090\n2093\n2108\n2109\n2110\n2118\n2114\n2121\n2124\n2125\n2111\n2112\n2126\n2127\n2138\n2141\n2153\n2158\n2170\n2161\n2162\n2163\n2164\n2165\n2175\n2196\n2205\n2210\n2209\n2210\n2218\n2234\n2254\n2255\n2266\n2267\n2269\n2270\n2274\n2276\n2263\n2264\n2266\n2267\n2264\n2267\n2276\n2283\n2284\n2287\n2298\n2299\n2309\n2310\n2321\n2322\n2323\n2328\n2330\n2333\n2336\n2366\n2367\n2368\n2365\n2371\n2372\n2373\n2371\n2375\n2376\n2373\n2379\n2380\n2382\n2392\n2394\n2398\n2420\n2427\n2438\n2439\n2440\n2441\n2452\n2453\n2478\n2482\n2484\n2495\n2510\n2514\n2516\n2531\n2536\n2563\n2564\n2559\n2585\n2599\n2608\n2613\n2611\n2619\n2633\n2644\n2645\n2646\n2649\n2632\n2649\n2656\n2651\n2663\n2678\n2684\n2682\n2684\n2685\n2686\n2687\n2708\n2709\n2718\n2720\n2721\n2727\n2733\n2751\n2740\n2742\n2749\n2748\n2750\n2780\n2757\n2762\n2760\n2771\n2758\n2777\n2781\n2785\n2787\n2812\n2825\n2830\n2838\n2840\n2852\n2857\n2862\n2865\n2847\n2846\n2847\n2848\n2849\n2852\n2854\n2859\n2868\n2870\n2872\n2873\n2882\n2889\n2890\n2893\n2890\n2891\n2895\n2901\n2907\n2911\n2912\n2920\n2921\n2925\n2924\n2942\n2952\n2961\n2965\n2964\n2978\n2981\n2992\n3010\n3005\n3019\n3013\n3015\n3019\n3022\n3024\n3027\n3037\n3038\n3041\n3043\n3047\n3065\n3075\n3083\n3092\n3093\n3117\n3118\n3119\n3125\n3126\n3130\n3145\n3137\n3149\n3153\n3154\n3155\n3180\n3182\n3183\n3182\n3200\n3202\n3214\n3197\n3207\n3185\n3203\n3208\n3209\n3208\n3231\n3233\n3234\n3242\n3255\n3256\n3257\n3258\n3265\n3268\n3290\n3291\n3297\n3311\n3301\n3309\n3314\n3317\n3319\n3320\n3337\n3347\n3362\n3376\n3390\n3404\n3412\n3417\n3418\n3421\n3425\n3436\n3438\n3439\n3453\n3467\n3484\n3485\n3486\n3515\n3516\n3521\n3527\n3534\n3551\n3561\n3572\n3573\n3574\n3596\n3612\n3595\n3616\n3617\n3619\n3620\n3624\n3634\n3657\n3663\n3671\n3686\n3687\n3694\n3704\n3695\n3697\n3698\n3699\n3700\n3701\n3702\n3704\n3705\n3707\n3716\n3717\n3732\n3747\n3748\n3745\n3746\n3748\n3756\n3757\n3764\n3765\n3766\n3768\n3784\n3807\n3810\n3805\n3811\n3812\n3813\n3828\n3840\n3847\n3848\n3851\n3850\n3851\n3855\n3861\n3862\n3867\n3864\n3871\n3879\n3884\n3885\n3887\n3888\n3928\n3948\n3949\n3950\n3960\n3959\n3965\n3973\n3970\n3971\n3972\n3974\n3969\n3997\n3998\n4014\n4016\n4017\n4026\n4039\n4043\n4052\n4053\n4051\n4054\n4058\n4066\n4067\n4073\n4077\n4084\n4072\n4078\n4083\n4094\n4101\n4107\n4115\n4138\n4141\n4143\n4166\n4177\n4184\n4194\n4192\n4198\n4203\n4204\n4209\n4215\n4217\n4226\n4231\n4252\n4253\n4260\n4294\n4306\n4307\n4314\n4316\n4317\n4325\n4326\n4334\n4344\n4348\n4344\n4348\n4350\n4358\n4383\n4384\n4390\n4383\n4378\n4374\n4377\n4398\n4399\n4431\n4432\n4433\n4432\n4443\n4441\n4442\n4443\n4439\n4441\n4444\n4445\n4446\n4449\n4452\n4458\n4463\n4469\n4472\n4475\n4478\n4491\n4504\n4507\n4509\n4510\n4511\n4513\n4525\n4532\n4533\n4541\n4552\n4551\n4552\n4573\n4594\n4597\n4601\n4602\n4617\n4621\n4622\n4621\n4601\n4604\n4606\n4607\n4611\n4591\n4604\n4608\n4615\n4613\n4" <> ...
+```
+
+<!-- livebook:{"branch_parent_index":0} -->
+
+## Challenge 1
+
+> To do this, count the number of times a depth measurement increases from the previous measurement. (There is no measurement before the first measurement.) In the example above, the changes are as follows:
+> 
+> ```
+> 199 (N/A - no previous measurement)
+> 200 (increased)
+> 208 (increased)
+> 210 (increased)
+> 200 (decreased)
+> 207 (increased)
+> 240 (increased)
+> 269 (increased)
+> 260 (decreased)
+> 263 (increased)
+> ```
+> 
+> In this example, there are 7 measurements that are larger than the previous measurement.
+> 
+> How many measurements are larger than the previous measurement?
+
+<!-- livebook:{"break_markdown":true} -->
+
+First, I'll setup a module so I can write the functions that will do the heavy lifting.
+
+```elixir
+defmodule Counter do
+  def count_increases(second_num, first_num) when is_integer(first_num) do
+    {second_num, evaluate(first_num, second_num, 0)}
+  end
+
+  def count_increases(next_num, {previous_num, increases_count}) do
+    {next_num, evaluate(previous_num, next_num, increases_count)}
+  end
+
+  def evaluate(previous_num, next_num, count) do
+    case next_num > previous_num do
+      true -> count + 1
+      false -> count
+    end
+  end
+end
+```
+
+```output
+{:module, Counter, <<70, 79, 82, 49, 0, 0, 7, ...>>, {:evaluate, 3}}
+```
+
+Then, I'll prepare the string of numbers, feed it to the `count_increases` reducer and grab the element in the first position of the resulting tuple...
+
+```elixir
+measurements
+|> String.split()
+|> Enum.map(&String.to_integer/1)
+|> Enum.reduce(&Counter.count_increases/2)
+|> elem(1)
+```
+
+```output
+1766
+```
+
+That last bit took "1ms" to calculate. I wonder how a stream might do...
+
+```elixir
+measurements
+|> String.split()
+|> Stream.map(&String.to_integer/1)
+|> Enum.reduce(&Counter.count_increases/2)
+|> elem(1)
+```
+
+```output
+1766
+```
+
+Haha. That took longer. 3ms. I am guessing we need much more data for the overhead of creating a Stream to cost less than just using an Enum.
+
+I could probably go a little further and use `Stream.transform`, but I'll save that for another day!
+
+## Challenge 2
+
+Considering every single measurement isn't as useful as you expected: there's just too much noise in the data.
+
+Instead, consider sums of a three-measurement sliding window. Again considering the above example:
+
+```
+199  A      
+200  A B    
+208  A B C  
+210    B C D
+200  E   C D
+207  E F   D
+240  E F G  
+269    F G H
+260      G H
+263        H
+```
+
+Start by comparing the first and second three-measurement windows. The measurements in the first window are marked A (199, 200, 208); their sum is 199 + 200 + 208 = 607. The second window is marked B (200, 208, 210); its sum is 618. The sum of measurements in the second window is larger than the sum of the first, so this first comparison increased.
+
+Your goal now is to count the number of times the sum of measurements in this sliding window increases from the previous sum. So, compare A with B, then compare B with C, then C with D, and so on. Stop when there aren't enough measurements left to create a new three-measurement sum.
+
+In the above example, the sum of each three-measurement window is as follows:
+
+```
+A: 607 (N/A - no previous sum)
+B: 618 (increased)
+C: 618 (no change)
+D: 617 (decreased)
+E: 647 (increased)
+F: 716 (increased)
+G: 769 (increased)
+H: 792 (increased)
+```
+
+In this example, there are 5 sums that are larger than the previous sum.
+
+Consider sums of a three-measurement sliding window. How many sums are larger than the previous sum?
+
+<!-- livebook:{"break_markdown":true} -->
+
+My first attempt was wrong...
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+offset_0 = measurements
+  |> String.split 
+  |> Enum.map(&String.to_integer/1)
+
+offset_1 = offset_0 |> Enum.drop(1)
+offset_2 = offset_0 |> Enum.drop(2)
+
+Enum.zip_reduce([offset_0,offset_1,offset_2], [], fn 
+  (terms, acc) -> [Enum.sum(terms)|acc] 
+end)
+  |> Enum.reduce(&Counter.count_increases/2)
+  |> elem(1)
+```
+
+The output was 177, which was deemed too low.
+
+So let's test with the example code.
+
+```elixir
+test_measurements = """
+199
+200
+208
+210
+200
+207
+240
+269
+260
+263
+"""
+
+offset_0 =
+  test_measurements
+  |> String.split()
+  |> Enum.map(&String.to_integer/1)
+
+offset_1 = offset_0 |> Enum.drop(1)
+offset_2 = offset_0 |> Enum.drop(2)
+
+Enum.zip_reduce([offset_0, offset_1, offset_2], [], fn
+  terms, acc -> [Enum.sum(terms) | acc]
+end)
+
+# we want this to be the numbers that look like.
+# 607 (N/A - no previous sum)
+# B: 618 (increased)
+# C: 618 (no change)
+# D: 617 (decreased)
+# E: 647 (increased)
+# F: 716 (increased)
+# G: 769 (increased)
+# H: 792
+```
+
+```output
+[792, 769, 716, 647, 617, 618, 618, 607]
+```
+
+Haha. I forgot to reverse it!
+
+```elixir
+offset_0 =
+  test_measurements
+  |> String.split()
+  |> Enum.map(&String.to_integer/1)
+
+offset_1 = offset_0 |> Enum.drop(1)
+offset_2 = offset_0 |> Enum.drop(2)
+
+Enum.zip_reduce([offset_0, offset_1, offset_2], [], fn
+  terms, acc -> [Enum.sum(terms) | acc]
+end)
+|> Enum.reverse()
+|> Enum.reduce(&Counter.count_increases/2)
+|> elem(1)
+```
+
+```output
+5
+```
+
+Bingo. 5 was it... so...
+
+```elixir
+# Again, starting with the raw string of measurements
+offset_0 =
+  measurements
+  |> String.split()
+  |> Enum.map(&String.to_integer/1)
+
+offset_1 = offset_0 |> Enum.drop(1)
+offset_2 = offset_0 |> Enum.drop(2)
+
+Enum.zip_reduce([offset_0, offset_1, offset_2], [], fn
+  terms, acc -> [Enum.sum(terms) | acc]
+end)
+|> Enum.reverse()
+# and then this bit is the same, using the moduled defined earlier...
+|> Enum.reduce(&Counter.count_increases/2)
+|> elem(1)
+```
+
+```output
+1797
+```
+
+<!-- livebook:{"branch_parent_index":0} -->
+
+## Refactor
+
+Well, a conversation at work led me to search for "windowed elixir" and I found that `Enum.chunk_every/4` will do lots of the work here.
+
+```elixir
+# measurements is the contents of "day_01_input.txt"
+numbers =
+  measurements
+  |> String.split()
+  |> Enum.map(&String.to_integer/1)
+
+answer_1 =
+  numbers
+  |> Enum.chunk_every(2, 1, :discard)
+  |> Enum.map(fn [a, b] -> if a < b, do: 1, else: 0 end)
+  |> Enum.sum()
+
+answer_2 =
+  numbers
+  |> Enum.chunk_every(3, 1, :discard)
+  |> Enum.map(&Enum.sum/1)
+  |> Enum.chunk_every(2, 1, :discard)
+  |> Enum.map(fn [a, b] -> if a < b, do: 1, else: 0 end)
+  |> Enum.sum()
+
+%{answer_1: answer_1, answer_2: answer_2}
+```
+
+```output
+%{answer_1: 1766, answer_2: 1797}
+```
+
+And based on a comment from Michael Sims:
+
+> Saw a guy on reddit mention that you don't have to sum the triplets. Since each pair of triplets contains two terms in common ( (B + C + D) > (A + B + C) ) they can be removed and you can just compare (D > A). Meaning you can take sliding windows of 4 measurements and just compare the last to the first. Neat.
+
+```elixir
+answer_2_v2 =
+  numbers
+  |> Enum.chunk_every(4, 1, :discard)
+  |> Enum.map(fn [a, _, _, d] -> if a < d, do: 1, else: 0 end)
+  |> Enum.sum()
+```
+
+```output
+1797
+```
