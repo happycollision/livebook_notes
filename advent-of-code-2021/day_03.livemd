@@ -1,0 +1,492 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# Advent of Code Day 3: Binary Diagnostic
+
+## Setup
+
+```elixir
+diagnostics = File.read!("./advent-of-code-2021/day_03_input.txt")
+
+test_diagnostics = """
+00100
+11110
+10110
+10111
+10101
+01111
+00111
+11100
+10000
+11001
+00010
+01010
+"""
+```
+
+```output
+"00100\n11110\n10110\n10111\n10101\n01111\n00111\n11100\n10000\n11001\n00010\n01010\n"
+```
+
+## Part 1
+
+The submarine has been making some odd creaking noises, so you ask it to produce a diagnostic report just in case.
+
+The diagnostic report (your puzzle input) consists of a list of binary numbers which, when decoded properly, can tell you many useful things about the conditions of the submarine. The first parameter to check is the power consumption.
+
+You need to use the binary numbers in the diagnostic report to generate two new binary numbers (called the gamma rate and the epsilon rate). The power consumption can then be found by multiplying the gamma rate by the epsilon rate.
+
+Each bit in the gamma rate can be determined by finding the most common bit in the corresponding position of all numbers in the diagnostic report. For example, given the following diagnostic report:
+
+```
+00100
+11110
+10110
+10111
+10101
+01111
+00111
+11100
+10000
+11001
+00010
+01010
+```
+
+Considering only the first bit of each number, there are five 0 bits and seven 1 bits. Since the most common bit is 1, the first bit of the gamma rate is 1.
+
+The most common second bit of the numbers in the diagnostic report is 0, so the second bit of the gamma rate is 0.
+
+The most common value of the third, fourth, and fifth bits are 1, 1, and 0, respectively, and so the final three bits of the gamma rate are 110.
+
+So, the gamma rate is the binary number 10110, or 22 in decimal.
+
+The epsilon rate is calculated in a similar way; rather than use the most common bit, the least common bit from each position is used. So, the epsilon rate is 01001, or 9 in decimal. Multiplying the gamma rate (22) by the epsilon rate (9) produces the power consumption, 198.
+
+Use the binary numbers in your diagnostic report to calculate the gamma rate and epsilon rate, then multiply them together. What is the power consumption of the submarine? (Be sure to represent your answer in decimal, not binary.)
+
+## Brute force answer 1
+
+I don't really know how to work with bits in Elixir. So converting all of these into a multi-dimensional array works for now!
+
+```elixir
+tensor =
+  diagnostics
+  |> String.split("\n", trim: true)
+  |> Enum.map(&String.graphemes/1)
+  |> Enum.map(fn x -> Enum.map(x, &String.to_integer/1) end)
+  |> IO.inspect(label: "it's a tensor... kinda?", limit: 15)
+
+gamma_rate_bin =
+  tensor
+  |> List.zip()
+  |> Enum.map(fn x ->
+    x
+    |> Tuple.to_list()
+    |> Enum.frequencies()
+    |> (fn %{0 => zero, 1 => one} -> if zero > one, do: 0, else: 1 end).()
+  end)
+  |> IO.inspect(label: "gamma_rate_bin")
+
+gamma_rate =
+  gamma_rate_bin
+  |> Enum.join()
+  |> String.to_charlist()
+  |> List.to_integer(2)
+  |> IO.inspect(label: "gamma_rate")
+
+epsilon_rate_bin =
+  gamma_rate_bin
+  |> Enum.map(fn
+    0 -> 1
+    1 -> 0
+  end)
+  |> IO.inspect(label: "epsilon_rate_bin")
+
+epsilon_rate =
+  epsilon_rate_bin
+  |> Enum.join()
+  |> String.to_charlist()
+  |> List.to_integer(2)
+  |> IO.inspect(label: "epsilon_rate")
+
+answer_1 = epsilon_rate * gamma_rate
+```
+
+```output
+it's a tensor... kinda?: [
+  [0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0],
+  [1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1],
+  [0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1],
+  [1, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1, ...],
+  [1, 1, 0, 0, 0, 0, 0, 1, 1, 0, ...],
+  [0, 1, 1, 1, 0, 1, 0, 1, 0, ...],
+  [0, 1, 1, 1, 1, 0, 0, 0, ...],
+  [0, 1, 0, 1, 1, 1, 1, ...],
+  [1, 1, 1, 0, 1, 1, ...],
+  [0, 1, 1, 1, 1, ...],
+  [0, 1, 0, 1, ...],
+  [0, 0, 0, ...],
+  [1, 1, ...],
+  [0, ...],
+  [...],
+  ...
+]
+gamma_rate_bin: [0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1]
+gamma_rate: 199
+epsilon_rate_bin: [1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0]
+epsilon_rate: 3896
+```
+
+```output
+775304
+```
+
+## Playing with bits...
+
+Now for some learning...
+
+I saw this comprehension for getting an array of 1's and 0's out of a series of known bits...
+
+```elixir
+list = for <<(b::1 <- <<1::1, 1::1, 1::1, 0::1>>)>>, do: b
+# returns the Base 10 equivalant of [0b1, 0b1, 0b1, 0b0]
+```
+
+```output
+[1, 1, 1, 0]
+```
+
+And by changing the term on the left side of the arrow, you can group the bits such that you get a different integer
+
+```elixir
+list = for <<(b::2 <- <<1::1, 1::1, 1::1, 0::1>>)>>, do: b
+# returns the Base 10 equivalant of [0b11, 0b10]
+```
+
+```output
+[3, 2]
+```
+
+Then I found a slide deck (boo!) with very confusing syntax for indicating the _inline return value_ of an expression (double boo!). But I ultimately discovered the expressions I used to create these two Bit helpers below.
+
+```elixir
+defmodule Bit do
+  use Bitwise
+
+  @doc """
+  Returns a 1 or 0 based on the bit at the given integer's base-2 representation.
+  Strings are assumed to have only digits and are thus coerced into Integers
+
+  ## Examples
+
+      iex> Bit.at(4,3)
+      1
+
+      iex> Bit.at(0b1011010, 7)
+      1
+
+      iex> Bit.at(0b1011010, 6)
+      0
+
+      iex> Bit.at("1011010", 5)
+      1
+  """
+  def at(bits, position)
+      when is_integer(bits) and is_integer(position)
+      when is_binary(bits) and is_integer(position) do
+    value_at(bits, position) >>> (position - 1)
+  end
+
+  @doc """
+  Returns the 2^x integer based on the bit at the given integer's base-2 representation
+
+  ## Examples
+
+      iex> Bit.value_at(4,3) # -> 0b100
+      4
+
+      iex> Bit.value_at(0b1011010, 7) # -> 0b1000000
+      64
+
+      iex> Bit.value_at(0b1011010, 6) # -> 0b000000
+      0
+
+      iex> Bit.value_at("1011010", 5) # -> 0b10000
+      16
+
+  """
+  def value_at(bits, position) when is_integer(bits) and is_integer(position) do
+    bits &&& 1 <<< (position - 1)
+  end
+
+  # I talk about this Integer.parse discovery in the next paragraph
+  def value_at(bits, position) when is_binary(bits) do
+    value_at(Integer.parse(bits, 2) |> elem(0), position)
+  end
+end
+
+Bit.at("1011010", 5)
+```
+
+```output
+1
+```
+
+And the big key to being able to actually use any of the code above to see if it worked the way I thought — it did not at first — was to discover that `Integer.parse` and `Integer.to_string` have versions with and airity of 2. And you can declare the base of the number system you want to use.
+
+This means that I can actually get a visual indication of the bits I am working with.
+
+```elixir
+Integer.parse("1111001", 2) |> IO.inspect(label: "decimal num with remainder")
+Integer.to_string(121, 2) |> IO.inspect(label: "converted back to string of bits")
+```
+
+```output
+decimal num with remainder: {121, ""}
+converted back to string of bits: "1111001"
+```
+
+```output
+"1111001"
+```
+
+Crucially, this discovery about parsing a string representation of a series of bits means that I can actually store all the "diagnostic" data as real bits and do some Bitwise work on it.
+
+```elixir
+decimal_values =
+  test_diagnostics
+  |> String.split("\n", trim: true)
+  |> IO.inspect(label: "as strings")
+  |> Enum.map(&(Integer.parse(&1, 2) |> elem(0)))
+  |> IO.inspect(label: "as decimals")
+
+# and back to a readable bit representation...
+decimal_values
+|> Enum.map(&Integer.to_string(&1, 2))
+|> IO.inspect(label: "as strings")
+```
+
+```output
+as strings: ["00100", "11110", "10110", "10111", "10101", "01111", "00111", "11100",
+ "10000", "11001", "00010", "01010"]
+as decimals: [4, 30, 22, 23, 21, 15, 7, 28, 16, 25, 2, 10]
+as strings: ["100", "11110", "10110", "10111", "10101", "1111", "111", "11100", "10000",
+ "11001", "10", "1010"]
+```
+
+```output
+["100", "11110", "10110", "10111", "10101", "1111", "111", "11100", "10000", "11001", "10", "1010"]
+```
+
+> Note: You do see that the conversion back to strings removes any leading zeros. Good to keep in mind.
+
+Now that we have a way to get the decimals from the strings, we can create ~the same~ a similar multi-dimensional array from the brute force approach, via an actual understanding of the binary numbers. (The decimal values are represented by enture bytes at a time, so we are getting 8 bits... hence leading zeros.)
+
+```elixir
+decimal_values
+|> Enum.map(fn decimal -> for <<(b::1 <- <<decimal>>)>>, do: b end)
+```
+
+```output
+[
+  [0, 0, 0, 0, 0, 1, 0, 0],
+  [0, 0, 0, 1, 1, 1, 1, 0],
+  [0, 0, 0, 1, 0, 1, 1, 0],
+  [0, 0, 0, 1, 0, 1, 1, 1],
+  [0, 0, 0, 1, 0, 1, 0, 1],
+  [0, 0, 0, 0, 1, 1, 1, 1],
+  [0, 0, 0, 0, 0, 1, 1, 1],
+  [0, 0, 0, 1, 1, 1, 0, 0],
+  [0, 0, 0, 1, 0, 0, 0, 0],
+  [0, 0, 0, 1, 1, 0, 0, 1],
+  [0, 0, 0, 0, 0, 0, 1, 0],
+  [0, 0, 0, 0, 1, 0, 1, 0]
+]
+```
+
+### Playing epilogue
+
+Oh man. Reading the docs for `Inspect.Opts` led me to discover...
+
+```elixir
+# <--- Read the docs on this!
+Inspect.Opts
+
+IO.inspect(<<126>>)
+IO.inspect(<<126>>, binaries: :as_binary)
+
+IO.puts("")
+
+IO.inspect(10)
+IO.inspect(10, base: :binary)
+IO.inspect(0b1010)
+IO.inspect(0b1010, base: :binary)
+
+IO.puts("")
+
+IO.inspect(<<126>>)
+IO.inspect(<<126>>, base: :binary)
+IO.inspect(<<0b1111110>>)
+IO.inspect(<<0b1111110>>, base: :binary)
+```
+
+```output
+"~"
+<<126>>
+
+10
+0b1010
+10
+0b1010
+
+"~"
+<<0b1111110>>
+"~"
+<<0b1111110>>
+```
+
+```output
+"~"
+```
+
+## Part 2 Story
+
+Next, you should verify the **life support rating**, which can be determined by multiplying the **oxygen generator rating** by the **CO2 scrubber rating**.
+
+Both the oxygen generator rating and the CO2 scrubber rating are values that can be found in your diagnostic report - finding them is the tricky part. Both values are located using a similar process that involves filtering out values until only one remains. Before searching for either rating value, start with the full list of binary numbers from your diagnostic report and consider just the first bit of those numbers. Then:
+
+* Keep only numbers selected by the bit criteria for the type of rating value for which you are searching. Discard numbers which do not match the bit criteria.
+* If you only have one number left, stop; this is the rating value for which you are searching.
+* Otherwise, repeat the process, considering the next bit to the right.
+
+The bit criteria depends on which type of rating value you want to find:
+
+* To find oxygen generator rating, determine the most common value (0 or 1) in the current bit position, and keep only numbers with that bit in that position. If 0 and 1 are equally common, keep values with a 1 in the position being considered.
+* To find CO2 scrubber rating, determine the least common value (0 or 1) in the current bit position, and keep only numbers with that bit in that position. If 0 and 1 are equally common, keep values with a 0 in the position being considered.
+
+For example, to determine the oxygen generator rating value using the same example diagnostic report from above:
+
+* Start with all 12 numbers and consider only the first bit of each number. There are more 1 bits (7) than 0 bits (5), so keep only the 7 numbers with a 1 in the first position: 11110, 10110, 10111, 10101, 11100, 10000, and 11001.
+* Then, consider the second bit of the 7 remaining numbers: there are more 0 bits (4) than 1 bits (3), so keep only the 4 numbers with a 0 in the second position: 10110, 10111, 10101, and 10000.
+* In the third position, three of the four numbers have a 1, so keep those three: 10110, 10111, and 10101.
+* In the fourth position, two of the three numbers have a 1, so keep those two: 10110 and 10111.
+* In the fifth position, there are an equal number of 0 bits and 1 bits (one each). So, to find the oxygen generator rating, keep the number with a 1 in that position: 10111.
+* As there is only one number left, stop; the oxygen generator rating is 10111, or 23 in decimal.
+
+Then, to determine the CO2 scrubber rating value from the same example above:
+
+* Start again with all 12 numbers and consider only the first bit of each number. There are fewer 0 bits (5) than 1 bits (7), so keep only the 5 numbers with a 0 in the first position: 00100, 01111, 00111, 00010, and 01010.
+* Then, consider the second bit of the 5 remaining numbers: there are fewer 1 bits (2) than 0 bits (3), so keep only the 2 numbers with a 1 in the second position: 01111 and 01010.
+* In the third position, there are an equal number of 0 bits and 1 bits (one each). So, to find the CO2 scrubber rating, keep the number with a 0 in that position: 01010.
+* As there is only one number left, stop; the CO2 scrubber rating is 01010, or 10 in decimal.
+
+Finally, to find the life support rating, multiply the oxygen generator rating (23) by the CO2 scrubber rating (10) to get 230.
+
+Use the binary numbers in your diagnostic report to calculate the oxygen generator rating and CO2 scrubber rating, then multiply them together. What is the life support rating of the submarine? (Be sure to represent your answer in decimal, not binary.)
+
+```elixir
+string_bins = diagnostics |> String.split("\n", trim: true)
+
+to_bin = &(Integer.parse(&1, 2) |> elem(0))
+
+positional_winner = fn
+  bins, pos, compare when is_list(bins) and is_integer(pos) ->
+    total =
+      bins
+      |> Enum.map(&String.at(&1, pos))
+      |> Enum.map(&String.to_integer/1)
+      # |> IO.inspect()
+      |> Enum.sum()
+
+    # >= because of "if a tie, 1 wins" vs "0 wins"
+    if compare.(total, Enum.count(bins) / 2), do: 1, else: 0
+end
+
+filter_winners = fn string_bins, pos, compare ->
+  winner = positional_winner.(string_bins, pos, compare)
+  # |> IO.inspect(label: "winner")
+
+  string_bins
+  |> Enum.filter(fn str -> String.at(str, pos) == to_string(winner) end)
+end
+
+find_winner = fn string_bins, compare ->
+  i =
+    string_bins
+    |> Enum.at(0)
+    |> String.length()
+
+  [final | []] =
+    Enum.reduce(0..(i - 1), string_bins, fn idx, remaining_bins ->
+      # IO.inspect({idx, remaining_bins})
+      if Enum.count(remaining_bins) > 1 do
+        filter_winners.(remaining_bins, idx, compare)
+      else
+        remaining_bins
+      end
+    end)
+
+  final
+end
+
+oxygen_generator_rating =
+  find_winner.(string_bins, &(&1 >= &2))
+  |> Integer.parse(2)
+  |> elem(0)
+  |> IO.inspect(label: "oxygen_generator_rating")
+
+flip_bit = fn
+  "0" -> "1"
+  "1" -> "0"
+end
+
+bit_flipper = fn str ->
+  String.graphemes(str)
+  |> Enum.map(flip_bit)
+  |> Enum.join()
+end
+
+co2_scrubber_rating =
+  find_winner.(string_bins |> Enum.map(bit_flipper), &(&1 <= &2))
+  |> bit_flipper.()
+  |> Integer.parse(2)
+  |> elem(0)
+  |> IO.inspect(label: "co2_scrubber_rating")
+
+co2_scrubber_rating * oxygen_generator_rating
+
+# OH! no. The code below is useless. You are supposed to recalculate the majority/minority after each filtering
+
+# majority_bits = pivot_tensor 
+#   |> Enum.map(fn x ->
+#     x  
+#       |> Enum.frequencies()
+#       |> (fn %{0 => zero, 1 => one} -> if zero > one, do: 0, else: 1 end).()
+#     end)
+#   |> IO.inspect(label: "majority_bits")
+
+#   flip_bit = fn 
+#     0 -> 1
+#     1 -> 0 
+#   end
+
+# minority_bits = majority_bits
+#   |> Enum.map(flip_bit)
+#   |> IO.inspect(label: "minority_bits")
+
+# majority_bits
+#   |> Enum.reduce({0, tensor}, fn 
+#    _, {idx, [final_num|[]]} -> {idx, [final_num]}
+#     chosen_bit, {idx, tensor} -> {idx + 1, Enum.filter(tensor, fn bits -> Enum.at(bits, idx) == chosen_bit end)}
+#   end)
+#   |> elem(1)
+```
+
+```output
+oxygen_generator_rating: 509
+co2_scrubber_rating: 2693
+```
+
+```output
+1370737
+```
