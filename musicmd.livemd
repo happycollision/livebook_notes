@@ -56,7 +56,13 @@ We also need to identify pairs of lines where one is chords and the other is lyr
 
 ```elixir
 music = """
-D      G       D
+D  G  D
+G     F#m
+G  A  Bm
+G  Em G
+D  G  D
+
+       D      G       D
 Oh the summer time is comin'
         G                 F#m
 And the trees are sweetly bloomin'
@@ -65,6 +71,8 @@ And the wild mountain thyme
        G         Em       G
 grows around the bloomin' heather
 
+
+[Chorus:]
         D   G       D
 Will ye go, lassie, go?
           G        F#m
@@ -75,8 +83,51 @@ To pluck wild mountain thyme
 Grows around the bloomin' heather
         D   G       D
 Will ye go, lassie, go?
+
+
+I will build my love a bower
+Near yon pure, crystal fountain
+And on it, I will pile
+All the flowers of the mountain
+
+[Chorus]
+
+If my true love were gone
+I would surely find another
+Where the wild mountain thyme
+Grows around the bloomin' heather
+
+[Chorus]
+
+Oh the summertime is comin'
+And the trees are sweetly bloomin'
+And the wild mountain time
+Grows around the bloomin' heather
+
+[Chorus]
 """
 
 Music.string_to_token_positions(music)
-|> Enum.chunk()
+|> Enum.map(
+  &cond do
+    # adding nil to the blank allows us to use Enum.into(arr, map) later
+    Enum.count(&1) == 0 -> {:blank, nil}
+    # This regex/logic is very dumb. Not even sure how to make it foolproof.
+    # Perhaps we can add a list of allowed sufixes (aug, dim, maj, etc.)
+    # plus an optional number? Also an optional `/{Letter}` for the bass?
+    Enum.all?(&1, fn {token, _} -> Regex.match?(~r/^[A-G]/, token) end) -> {:chords, &1}
+    true -> {:lyrics, &1}
+  end
+)
+
+# merge lyrics up into chords, or make a new line (List)
+|> Enum.reduce([], fn
+  {:lyrics, _} = lyrics, [[{:chords, _} = chords] | lines] -> [[chords, lyrics] | lines]
+  annotated_part, lines -> [[annotated_part] | lines]
+end)
+|> Enum.reverse()
+
+# Turn these groups into maps, and ensure they all have lists in :chords, and :lyrics
+|> Enum.map(&Enum.into(&1, %{}))
+|> Enum.map(&(Map.merge(%{chords: [], lyrics: []}, &1) |> Map.drop([:blank])))
 ```
