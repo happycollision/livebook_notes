@@ -1,0 +1,267 @@
+# Advent of Code Day 8: Seven Segment Search
+
+## Setup
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+input = File.read!("./advent-of-code-2021/day_08_input.txt")
+
+test_input = """
+be cfbegad cbdgef fgaecd cgeb fdcge agebfd fecdb fabcd edb | fdgacbe cefdb cefbgd gcbe
+edbfga begcd cbg gc gcadebf fbgde acbgfd abcde gfcbed gfec | fcgedb cgb dgebacf gc
+fgaebd cg bdaec gdafb agbcfd gdcbef bgcad gfac gcb cdgabef | cg cg fdcagb cbg
+fbegcd cbd adcefb dageb afcb bc aefdc ecdab fgdeca fcdbega | efabcd cedba gadfec cb
+aecbfdg fbg gf bafeg dbefa fcge gcbea fcaegb dgceab fcbdga | gecf egdcabf bgf bfgea
+fgeab ca afcebg bdacfeg cfaedg gcfdb baec bfadeg bafgc acf | gebdcfa ecba ca fadegcb
+dbcfg fgd bdegcaf fgec aegbdf ecdfab fbedc dacgb gdcebf gf | cefg dcbef fcge gbcadfe
+bdfegc cbegaf gecbf dfcage bdacg ed bedf ced adcbefg gebcd | ed bcgafe cdgba cbgef
+egadfb cdbfeg cegd fecab cgb gbdefca cg fgcdab egfdb bfceg | gbdfcae bgc cg cgb
+gcafb gcf dcaebfg ecagb gf abcdeg gaef cafbge fdbac fegbdc | fgae cfgab fg bagce
+"""
+```
+
+## Part 1
+
+> You barely reach the safety of the cave when the whale smashes into the cave mouth, collapsing it. Sensors indicate another exit to this cave at a much greater depth, so you have no choice but to press on.
+> 
+> As your submarine slowly makes its way through the cave system, you notice that the four-digit seven-segment displays in your submarine are malfunctioning; they must have been damaged during the escape. You'll be in a lot of trouble without them, so you'd better figure out what's wrong.
+> 
+> Each digit of a seven-segment display is rendered by turning on or off any of seven segments named a through g:
+> 
+> ```
+>   0:      1:      2:      3:      4:
+>  aaaa    ....    aaaa    aaaa    ....
+> b    c  .    c  .    c  .    c  b    c
+> b    c  .    c  .    c  .    c  b    c
+>  ....    ....    dddd    dddd    dddd
+> e    f  .    f  e    .  .    f  .    f
+> e    f  .    f  e    .  .    f  .    f
+>  gggg    ....    gggg    gggg    ....
+> 
+>   5:      6:      7:      8:      9:
+>  aaaa    aaaa    aaaa    aaaa    aaaa
+> b    .  b    .  .    c  b    c  b    c
+> b    .  b    .  .    c  b    c  b    c
+>  dddd    dddd    ....    dddd    dddd
+> .    f  e    f  .    f  e    f  .    f
+> .    f  e    f  .    f  e    f  .    f
+>  gggg    gggg    ....    gggg    gggg
+> ```
+> 
+> So, to render a 1, only segments c and f would be turned on; the rest would be off. To render a 7, only segments a, c, and f would be turned on.
+> 
+> The problem is that the signals which control the segments have been mixed up on each display. The submarine is still trying to display numbers by producing output on signal wires a through g, but those wires are connected to segments randomly. Worse, the wire/segment connections are mixed up separately for each four-digit display! (All of the digits within a display use the same connections, though.)
+> 
+> So, you might know that only signal wires b and g are turned on, but that doesn't mean segments b and g are turned on: the only digit that uses two segments is 1, so it must mean segments c and f are meant to be on. With just that information, you still can't tell which wire (b/g) goes to which segment (c/f). For that, you'll need to collect more information.
+> 
+> For each display, you watch the changing signals for a while, make a note of all ten unique signal patterns you see, and then write down a single four digit output value (your puzzle input). Using the signal patterns, you should be able to work out which pattern corresponds to which digit.
+> 
+> For example, here is what you might see in a single entry in your notes:
+> 
+> ```
+> acedgfb cdfbe gcdfa fbcad dab cefabd cdfgeb eafb cagedb ab |
+> cdfeb fcadb cdfeb cdbaf
+> ```
+> 
+> (The entry is wrapped here to two lines so it fits; in your notes, it will all be on a single line.)
+> 
+> Each entry consists of ten unique signal patterns, a | delimiter, and finally the four digit output value. Within an entry, the same wire/segment connections are used (but you don't know what the connections actually are). The unique signal patterns correspond to the ten different ways the submarine tries to render a digit using the current wire/segment connections. Because 7 is the only digit that uses three segments, dab in the above example means that to render a 7, signal lines d, a, and b are on. Because 4 is the only digit that uses four segments, eafb means that to render a 4, signal lines e, a, f, and b are on.
+> 
+> Using this information, you should be able to work out which combination of signal wires corresponds to each of the ten digits. Then, you can decode the four digit output value. Unfortunately, in the above example, all of the digits in the output value (cdfeb fcadb cdfeb cdbaf) use five segments and are more difficult to deduce.
+> 
+> For now, focus on the easy digits. Consider this larger example:
+> 
+> ```
+> be cfbegad cbdgef fgaecd cgeb fdcge agebfd fecdb fabcd edb |
+> fdgacbe cefdb cefbgd gcbe
+> edbfga begcd cbg gc gcadebf fbgde acbgfd abcde gfcbed gfec |
+> fcgedb cgb dgebacf gc
+> fgaebd cg bdaec gdafb agbcfd gdcbef bgcad gfac gcb cdgabef |
+> cg cg fdcagb cbg
+> fbegcd cbd adcefb dageb afcb bc aefdc ecdab fgdeca fcdbega |
+> efabcd cedba gadfec cb
+> aecbfdg fbg gf bafeg dbefa fcge gcbea fcaegb dgceab fcbdga |
+> gecf egdcabf bgf bfgea
+> fgeab ca afcebg bdacfeg cfaedg gcfdb baec bfadeg bafgc acf |
+> gebdcfa ecba ca fadegcb
+> dbcfg fgd bdegcaf fgec aegbdf ecdfab fbedc dacgb gdcebf gf |
+> cefg dcbef fcge gbcadfe
+> bdfegc cbegaf gecbf dfcage bdacg ed bedf ced adcbefg gebcd |
+> ed bcgafe cdgba cbgef
+> egadfb cdbfeg cegd fecab cgb gbdefca cg fgcdab egfdb bfceg |
+> gbdfcae bgc cg cgb
+> gcafb gcf dcaebfg ecagb gf abcdeg gaef cafbge fdbac fegbdc |
+> fgae cfgab fg bagce
+> ```
+> 
+> Because the digits 1, 4, 7, and 8 each use a unique number of segments, you should be able to tell which combinations of signals correspond to those digits. Counting only digits in the output values (the part after | on each line), in the above example, there are 26 instances of digits that use a unique number of segments (highlighted above).
+> 
+> In the output values, how many times do digits 1, 4, 7, or 8 appear?
+
+```elixir
+input
+|> String.split("\n", trim: true)
+|> Enum.map(&(String.split(&1, "|") |> then(fn x -> Enum.at(x, 1) end)))
+|> Enum.map(fn signal ->
+  String.split(signal) |> Enum.filter(&(String.length(&1) in [7, 4, 3, 2])) |> Enum.count()
+end)
+|> Enum.sum()
+```
+
+## Part 2
+
+> Through a little deduction, you should now be able to determine the remaining digits. Consider again the first example above:
+> 
+> ```
+> acedgfb cdfbe gcdfa fbcad dab cefabd cdfgeb eafb cagedb ab |
+> cdfeb fcadb cdfeb cdbaf
+> ```
+> 
+> After some careful analysis, the mapping between signal wires and segments only make sense in the following configuration:
+> 
+> ```
+>  dddd
+> e    a
+> e    a
+>  ffff
+> g    b
+> g    b
+>  cccc
+> ```
+> 
+> So, the unique signal patterns would correspond to the following digits:
+> 
+> ```
+> acedgfb: 8
+> cdfbe: 5
+> gcdfa: 2
+> fbcad: 3
+> dab: 7
+> cefabd: 9
+> cdfgeb: 6
+> eafb: 4
+> cagedb: 0
+> ab: 1
+> ```
+> 
+> Then, the four digits of the output value can be decoded:
+> 
+> ```
+> cdfeb: 5
+> fcadb: 3
+> cdfeb: 5
+> cdbaf: 3
+> ```
+> 
+> Therefore, the output value for this entry is 5353.
+> 
+> Following this same process for each entry in the second, larger example above, the output value of each entry can be determined:
+> 
+> ```
+> fdgacbe cefdb cefbgd gcbe: 8394
+> fcgedb cgb dgebacf gc: 9781
+> cg cg fdcagb cbg: 1197
+> efabcd cedba gadfec cb: 9361
+> gecf egdcabf bgf bfgea: 4873
+> gebdcfa ecba ca fadegcb: 8418
+> cefg dcbef fcge gbcadfe: 4548
+> ed bcgafe cdgba cbgef: 1625
+> gbdfcae bgc cg cgb: 8717
+> fgae cfgab fg bagce: 4315
+> ```
+> 
+> Adding all of the output values in this larger example produces 61229.
+> 
+> For each entry, determine all of the wire/segment connections and decode the four-digit output values. What do you get if you add up all of the output values?
+
+```elixir
+defmodule X do
+  def chars_minus(str1, str2) when is_binary(str1) do
+    chars_minus(to_charlist(str1), str2)
+  end
+
+  def chars_minus(cl, str2) when is_binary(str2) do
+    chars_minus(cl, to_charlist(str2))
+  end
+
+  def chars_minus(cl1, [a | _] = cl2) when is_list(cl2) and is_integer(a) do
+    cl1 -- cl2
+  end
+
+  def length_chars_minus(a, b) do
+    chars_minus(a, b) |> Enum.count()
+  end
+
+  def find_9(%{known: known, unknown: unknown}) do
+    missing_e_g = ('abcdefg' -- to_charlist(known[1] <> known[4] <> known[7])) |> Enum.uniq()
+
+    [nine] =
+      unknown
+      |> Enum.filter(&(String.length(&1) == 6))
+      |> Enum.filter(fn x -> length_chars_minus(missing_e_g, x) == 1 end)
+
+    %{known: Map.merge(known, %{9 => nine}), unknown: unknown -- [nine]}
+  end
+
+  def find_6_and_0(%{known: known, unknown: unknown}) do
+    six_and_zero = unknown |> Enum.filter(&(String.length(&1) == 6))
+
+    [six] =
+      six_and_zero
+      |> Enum.filter(fn binary -> X.length_chars_minus(known[1], binary) == 1 end)
+
+    [zero] = six_and_zero -- [six]
+
+    %{known: Map.merge(known, %{6 => six, 0 => zero}), unknown: unknown -- six_and_zero}
+  end
+
+  def find_3(%{known: known, unknown: unknown}) do
+    [three] = Enum.filter(unknown, fn str -> length_chars_minus(known[1], str) == 0 end)
+    %{known: Map.merge(known, %{3 => three}), unknown: unknown -- [three]}
+  end
+
+  def find_2_and_5(%{known: known, unknown: unknown}) do
+    [c | []] = chars_minus(known[1], known[6])
+
+    [two] = Enum.filter(unknown, fn str -> length_chars_minus([c], str) == 0 end)
+    [five] = unknown -- [two]
+    %{known: Map.merge(known, %{2 => two, 5 => five}), unknown: unknown -- [two, five]}
+  end
+end
+
+invert_map_and_sort_keys = &Map.new(&1, fn {key, val} -> {Enum.sort(to_charlist(val)), key} end)
+
+input
+|> String.split("\n", trim: true)
+|> Enum.map(fn x ->
+  String.split(x, "|")
+  |> Enum.map(&(&1 |> String.split()))
+  |> List.to_tuple()
+end)
+|> Enum.map(fn {calibration, code} ->
+  {calibration
+   |> Enum.map(fn
+     <<_::size(16)>> = x -> %{1 => x}
+     <<_::size(24)>> = x -> %{7 => x}
+     <<_::size(32)>> = x -> %{4 => x}
+     <<_::size(56)>> = x -> %{8 => x}
+     x -> {:unknown, x}
+   end)
+   |> Enum.reduce(%{known: %{}, unknown: []}, fn
+     %{} = x, acc -> Map.update!(acc, :known, &Map.merge(&1, x))
+     {:unknown, str}, acc -> Map.update!(acc, :unknown, &[str | &1])
+   end)
+   |> then(&X.find_9/1)
+   |> then(&X.find_6_and_0/1)
+   |> then(&X.find_3/1)
+   |> then(&X.find_2_and_5/1)
+   |> then(fn x -> x.known end)
+   |> then(invert_map_and_sort_keys), code}
+end)
+|> Enum.map(fn {map, code} -> {map, Enum.map(code, &(to_charlist(&1) |> Enum.sort()))} end)
+|> Enum.map(fn {map, code} ->
+  Enum.map(code, &map[&1]) |> Enum.join() |> String.to_integer()
+end)
+|> Enum.sum()
+```
