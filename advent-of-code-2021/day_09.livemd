@@ -1,0 +1,326 @@
+# Advent of Code Day 9: Smoke Basin
+
+## Setup
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+input = File.read!("./advent-of-code-2021/day_09_input.txt")
+
+test_input = """
+2199943210
+3987894921
+9856789892
+8767896789
+9899965678
+"""
+```
+
+## Part 1
+
+> These caves seem to be lava tubes. Parts are even still volcanically active; small hydrothermal vents release smoke into the caves that slowly settles like rain.
+>
+> If you can model how the smoke flows through the caves, you might be able to avoid it and be that much safer. The submarine generates a heightmap of the floor of the nearby caves for you (your puzzle input).
+>
+> Smoke flows to the lowest point of the area it's in. For example, consider the following heightmap:
+>
+> ```
+> 2199943210
+> 3987894921
+> 9856789892
+> 8767896789
+> 9899965678
+> ```
+>
+> Each number corresponds to the height of a particular location, where 9 is the highest and 0 is the lowest a location can be.
+>
+> Your first goal is to find the low points - the locations that are lower than any of its adjacent locations. Most locations have four adjacent locations (up, down, left, and right); locations on the edge or corner of the map have three or two adjacent locations, respectively. (Diagonal locations do not count as adjacent.)
+>
+> In the above example, there are four low points, all highlighted: two are in the first row (a 1 and a 0), one is in the third row (a 5), and one is in the bottom row (also a 5). All other locations on the heightmap have some lower adjacent location, and so are not low points.
+>
+> The risk level of a low point is 1 plus its height. In the above example, the risk levels of the low points are 2, 1, 6, and 6. The sum of the risk levels of all low points in the heightmap is therefore 15.
+>
+> Find all of the low points on your heightmap. What is the sum of the risk levels of all low points on your heightmap?
+
+```elixir
+defmodule H do
+  def input_to_data(str) when is_binary(str) do
+    lists = str |> String.split() |> Enum.map(&to_charlist/1)
+
+    line_length = lists |> Enum.at(0) |> Enum.count()
+
+    {line_length, lists |> Enum.concat()}
+  end
+
+  def neighbors_for_point(all_chars, point_location, line_length) do
+    neighbor_locations(point_location, line_length)
+    |> Enum.reject(&(&1 < 0))
+    |> Enum.reject(&(&1 + 1 > Enum.count(all_chars)))
+    |> Enum.map(&Enum.at(all_chars, &1))
+  end
+
+  def neighbor_locations(point_location, line_length) do
+    p = point_location
+    l = line_length
+
+    diff_line = &is_different_line(&1, l, p)
+
+    tops = [p - l] |> Enum.filter(diff_line)
+    middles = [p - 1, p + 1] |> Enum.reject(diff_line)
+    bottoms = [p + l] |> Enum.filter(diff_line)
+
+    Enum.concat([tops, middles, bottoms])
+  end
+
+  def is_different_line(point, line_length, reference_point) do
+    div(point, line_length) != div(reference_point, line_length)
+  end
+
+  # the first char of '9' is 57
+  def point_is_lowest(_, 57) do
+    false
+  end
+
+  # the first char of '0' is 48
+  def point_is_lowest(_, 48) do
+    true
+  end
+
+  def point_is_lowest(neighbors, point) when is_integer(point) and is_list(neighbors) do
+    !Enum.any?(neighbors, fn neighbor -> neighbor < point end)
+  end
+
+  def count_low_points(input) do
+    {line_length, chars} = input_to_data(input)
+
+    low_point_map =
+      Enum.with_index(chars)
+      |> Enum.map(fn {char, i} ->
+        neighbors_for_point(chars, i, line_length)
+        |> point_is_lowest(char)
+        |> then(fn bool -> if bool, do: 1, else: 0 end)
+      end)
+
+    chars
+    |> Enum.zip(low_point_map)
+    |> Enum.map(fn
+      {char, 0} -> 0
+      {char, 1} -> List.to_string([char]) |> String.to_integer() |> then(&(&1 + 1))
+    end)
+    |> Enum.sum()
+
+    # cheap_visualization = chars
+    # |> Enum.zip(low_point_map)
+    # |> Enum.map(fn
+    #   {char, 0} -> List.to_string([char]) <> " "
+    #   {char, 1} -> List.to_string([char]) <> "*"
+    # end)
+    # |> Enum.chunk_every(line_length)
+    # |> Enum.map(& &1 |> Enum.join())
+  end
+end
+
+Inspect.Opts
+
+H.count_low_points(test_input) |> IO.inspect(label: "Test")
+H.count_low_points(input)
+```
+
+<!-- livebook:{"branch_parent_index":0} -->
+
+## Part 2
+
+Next, you need to find the largest basins so you know what areas are most important to avoid.
+
+A basin is all locations that eventually flow downward to a single low point. Therefore, every low point has a basin, although some basins are very small. Locations of height 9 do not count as being in any basin, and all other locations will always be part of exactly one basin.
+
+The size of a basin is the number of locations within the basin, including the low point. The example above has four basins.
+
+The top-left basin, size 3:
+
+<pre>
+<code><em>21</em>99943210
+<em>3</em>987894921
+9856789892
+8767896789
+9899965678
+</code>
+</pre>
+
+The top-right basin, size 9:
+
+<pre>
+<code>21999<em>43210</em>
+398789<em>4</em>9<em>21</em>
+985678989<em>2</em>
+8767896789
+9899965678
+</code>
+</pre>
+
+The middle basin, size 14:
+
+<pre>
+<code>2199943210
+39<em>878</em>94921
+9<em>85678</em>9892
+<em>87678</em>96789
+9<em>8</em>99965678
+</code>
+</pre>
+
+The bottom-right basin, size 9:
+
+<pre>
+<code>2199943210
+3987894921
+9856789<em>8</em>92
+876789<em>678</em>9
+98999<em>65678</em>
+</code>
+</pre>
+
+Find the three largest basins and multiply their sizes together. In the above example, this is 9 _ 14 _ 9 = 1134.
+
+What do you get if you multiply together the sizes of the three largest basins?
+
+```elixir
+defmodule H do
+  def input_to_data(str) when is_binary(str) do
+    lists = str |> String.split() |> Enum.map(&to_charlist/1)
+
+    line_length = lists |> Enum.at(0) |> Enum.count()
+
+    {line_length, lists |> Enum.concat()}
+  end
+
+  def neighbors_for_point(all_chars, point_location, line_length) do
+    neighbor_locations(point_location, line_length)
+    |> Enum.reject(&(&1 < 0))
+    |> Enum.reject(&(&1 + 1 > Enum.count(all_chars)))
+    |> Enum.map(&Enum.at(all_chars, &1))
+  end
+
+  def neighbor_locations(point_location, line_length) do
+    p = point_location
+    l = line_length
+
+    diff_line = &is_different_line(&1, l, p)
+
+    tops = [p - l] |> Enum.filter(diff_line)
+    middles = [p - 1, p + 1] |> Enum.reject(diff_line)
+    bottoms = [p + l] |> Enum.filter(diff_line)
+
+    Enum.concat([tops, middles, bottoms])
+  end
+
+  def is_different_line(point, line_length, reference_point) do
+    div(point, line_length) != div(reference_point, line_length)
+  end
+
+  # the first char of '9' is 57
+  def point_is_lowest(_, 57) do
+    false
+  end
+
+  # the first char of '0' is 48
+  def point_is_lowest(_, 48) do
+    true
+  end
+
+  def point_is_lowest(neighbors, point) when is_integer(point) and is_list(neighbors) do
+    !Enum.any?(neighbors, fn neighbor -> neighbor < point end)
+  end
+
+  def find_lowest_neighbor(basin_data, i) do
+    neighbor_locations(i, basin_data.line_length)
+    |> Enum.map(fn loc ->
+      entry = basin_data[loc]
+      if entry != nil, do: {loc, elem(entry, 0)}, else: {loc, 999}
+    end)
+    |> Enum.reduce(fn {_, height} = el, {_, height2} = acc ->
+      if height < height2, do: el, else: acc
+    end)
+    |> then(&elem(&1, 0))
+  end
+
+  def seek_depth(basin_data, current_basin_members_indices, this_index) do
+    case Map.get(basin_data, this_index) do
+      {_height, :void} ->
+        # IO.puts("found ridge at #{this_index}")
+        basin_data
+
+      {_height, idx} when is_integer(idx) ->
+        # IO.puts("Found path at #{this_index} leading to basin at #{idx}")
+
+        current_basin_members_indices
+        |> Enum.reduce(basin_data, fn i, basin_data ->
+          Map.update!(basin_data, i, fn {height, :empty} -> {height, idx} end)
+        end)
+
+      {_height, :empty} ->
+        lowest_neighbor = find_lowest_neighbor(basin_data, this_index)
+
+        if Enum.any?(current_basin_members_indices, fn i -> lowest_neighbor == i end) do
+          # IO.puts("Found basin at #{this_index}")
+
+          current_basin_members_indices
+          |> Enum.reduce(basin_data, fn i, basin_data ->
+            Map.update!(basin_data, i, fn {height, :empty} -> {height, this_index} end)
+          end)
+        else
+          # IO.puts("checking #{lowest_neighbor}")
+
+          seek_depth(
+            basin_data,
+            [this_index | current_basin_members_indices],
+            lowest_neighbor
+          )
+        end
+    end
+  end
+
+  def basins(input) do
+    {line_length, chars} = input_to_data(input)
+
+    prepped_basin_data =
+      Enum.with_index(chars)
+      |> Enum.map(fn
+        {57, i} -> %{i => {57, :void}}
+        {48, i} -> %{i => {48, i}}
+        {char, i} -> %{i => {char, :empty}}
+      end)
+      |> Enum.reduce(fn cell, basin_data -> Map.merge(cell, basin_data) end)
+      |> Map.merge(%{line_length: line_length})
+
+    final_basin_data =
+      Enum.reduce(1..Enum.count(chars), prepped_basin_data, fn i, basin_data ->
+        # IO.puts("Starting at #{i-1}")
+        seek_depth(basin_data, [], i - 1)
+      end)
+
+    final_basin_data
+    |> Map.map(fn
+      {:line_length, val} -> -1
+      {_, {_, :void}} -> -1
+      {_, {_, basin_location}} -> basin_location
+    end)
+    |> Map.filter(fn {_, x} -> if x == -1, do: false, else: true end)
+    |> Map.to_list()
+    |> Enum.reduce(%{}, fn {_, el}, acc -> Map.update(acc, el, 1, fn num -> num + 1 end) end)
+    |> Map.to_list()
+    |> Enum.map(fn {_, this} -> this end)
+    |> Enum.sort()
+    |> Enum.reverse()
+    |> Enum.take(3)
+    |> Enum.product()
+  end
+end
+
+Inspect.Opts
+
+H.basins(test_input)
+|> IO.inspect(label: "Test")
+
+H.basins(input)
+```
