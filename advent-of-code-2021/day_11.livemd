@@ -1,0 +1,218 @@
+# Advent of code: Day 10 - Dumbo Octopus
+
+## Setup
+
+```elixir
+test_input =
+  """
+  5483143223
+  2745854711
+  5264556173
+  6141336146
+  6357385478
+  4167524645
+  2176841721
+  6882881134
+  4846848554
+  5283751526
+  """
+  |> String.trim()
+
+input =
+  """
+  8271653836
+  7567626775
+  2315713316
+  6542655315
+  2453637333
+  1247264328
+  2325146614
+  2115843171
+  6182376282
+  2384738675
+  """
+  |> String.trim()
+
+test_input_step_1 =
+  """
+  6594254334
+  3856965822
+  6375667284
+  7252447257
+  7468496589
+  5278635756
+  3287952832
+  7993992245
+  5957959665
+  6394862637
+  """
+  |> String.trim()
+
+test_input_step_2 =
+  """
+  8807476555
+  5089087054
+  8597889608
+  8485769600
+  8700908800
+  6600088989
+  6800005943
+  0000007456
+  9000000876
+  8700006848
+  """
+  |> String.trim()
+
+test_input_step_10 =
+  """
+  0481112976
+  0031112009
+  0041112504
+  0081111406
+  0099111306
+  0093511233
+  0442361130
+  5532252350
+  0532250600
+  0032240000
+  """
+  |> String.trim()
+
+test_input_step_100 =
+  """
+  0397666866
+  0749766918
+  0053976933
+  0004297822
+  0004229892
+  0053222877
+  0532222966
+  9322228966
+  7922286866
+  6789998766
+  """
+  |> String.trim()
+```
+
+## Part 1
+
+```elixir
+defmodule Flash do
+  def to_data(input) do
+    input
+    |> String.split("\n", trim: true)
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {row, r} ->
+      String.graphemes(row)
+      |> Enum.map(&String.to_integer/1)
+      |> Enum.with_index()
+      # Non-traditional: {y, x} (it sorts better later)
+      |> Enum.map(fn {num, c} -> {{r, c}, num} end)
+    end)
+    |> Enum.into(%{})
+  end
+
+  def as_enum(data) when is_map(data) do
+    data
+    |> Enum.sort()
+    |> Enum.chunk_by(fn {{n, _}, _} -> div(n, 1) end)
+    |> Enum.map(fn row ->
+      row |> Enum.map(&(elem(&1, 1) |> to_string() |> String.pad_leading(2)))
+    end)
+  end
+
+  def as_string_grid(data) when is_map(data) do
+    data
+    |> Enum.sort()
+    |> Enum.chunk_by(fn {{n, _}, _} -> div(n, 1) end)
+    |> Enum.map(fn row -> row |> Enum.map(&elem(&1, 1)) |> Enum.join() end)
+    |> Enum.join("\n")
+
+    # |> IO.puts()
+  end
+
+  def steps(input, steps) do
+    input = to_data(input)
+
+    Enum.reduce(1..steps, input, fn
+      _, {:done, steps, _, _} = result -> result
+      _, data -> step(data)
+    end)
+  end
+
+  def step({data, flash_count, num_steps}) do
+    data =
+      data
+      |> Map.map(fn {_, val} -> val + 1 end)
+      |> aftermath()
+
+    flashes = Map.values(data) |> Enum.filter(&(&1 == 0)) |> Enum.count()
+
+    if Map.values(data) |> Enum.all?(&(&1 == 0)) do
+      {:done, num_steps + 1, data, flash_count + flashes}
+    else
+      {data, flash_count + flashes, num_steps + 1}
+    end
+  end
+
+  def step(data) do
+    step({data, 0, 0})
+  end
+
+  def aftermath(data) do
+    flashers =
+      Enum.reduce(data, [], fn
+        {point, 10}, acc -> [point | acc]
+        _, acc -> acc
+      end)
+
+    aftermath(data, flashers)
+  end
+
+  def aftermath(data, []) do
+    data
+    |> Map.map(fn
+      {_, :flash} -> 0
+      {_, val} -> val
+    end)
+  end
+
+  def aftermath(data, flashers) do
+    neighbors =
+      flashers
+      |> Enum.flat_map(fn {y, x} ->
+        [
+          {y - 1, x - 1},
+          {y - 1, x},
+          {y - 1, x + 1},
+          {y, x - 1},
+          {y, x + 1},
+          {y + 1, x - 1},
+          {y + 1, x},
+          {y + 1, x + 1}
+        ]
+      end)
+      |> Enum.filter(fn point -> Map.has_key?(data, point) end)
+      |> Enum.reject(fn point -> point in flashers end)
+      |> Enum.reject(fn point -> Map.get(data, point) == :flash end)
+
+    aftermath(data, flashers, neighbors)
+  end
+
+  def aftermath(data, flashers, neighbors) do
+    data =
+      neighbors
+      |> Enum.reduce(data, fn point, data ->
+        Map.update!(data, point, fn val -> min(val + 1, 10) end)
+      end)
+
+    data =
+      flashers
+      |> Enum.reduce(data, fn point, data -> Map.update!(data, point, fn _ -> :flash end) end)
+
+    aftermath(data)
+  end
+end
+
+Flash.steps(input, 1000) |> elem(1)
+```
