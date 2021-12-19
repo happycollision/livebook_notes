@@ -1,0 +1,130 @@
+# Advent of code day 13
+
+## Setup
+
+```elixir
+Mix.install([
+  {:vega_lite, "~> 0.1.2"},
+  {:kino, "~> 0.4.1"}
+])
+
+alias VegaLite, as: Vl
+
+defmodule Plot do
+  def m(%{points: points} = map) do
+    {mx, my} = points |> Enum.reduce({0, 0}, fn {x, y}, {mx, my} -> {max(x, mx), max(y, my)} end)
+
+    Vl.new(width: mx * 5, height: my * 5)
+    |> Vl.data_from_values(points |> Enum.map(fn {x, y} -> %{x: x, y: y * -1} end))
+    |> Vl.mark(:point)
+    |> Vl.encode_field(:x, "x", type: :quantitative)
+    |> Vl.encode_field(:y, "y", type: :quantitative)
+    |> Kino.render()
+
+    map
+  end
+end
+```
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+input = File.read!("./advent-of-code-2021/day_13_input.txt")
+
+test_input = """
+6,10
+0,14
+9,10
+0,3
+10,4
+4,11
+6,0
+6,12
+4,1
+0,13
+10,12
+3,4
+3,0
+8,4
+1,10
+2,14
+8,10
+9,0
+
+fold along y=7
+fold along x=5
+"""
+
+prep = fn input ->
+  input
+  |> String.split("\n", trim: true)
+  |> Enum.reduce(%{}, fn
+    <<"fold along ">> <> fold, acc ->
+      [axis, value] = String.split(fold, "=")
+      value = String.to_integer(value)
+      Map.update(acc, :instructions, [{axis, value}], fn inst -> [{axis, value} | inst] end)
+
+    str, acc ->
+      [x, y] = str |> String.split(",") |> Enum.map(&String.to_integer/1)
+      Map.update(acc, :points, [{x, y}], fn points -> [{x, y} | points] end)
+  end)
+  |> Map.update!(:instructions, &Enum.reverse/1)
+end
+```
+
+## Part 1
+
+```elixir
+defmodule Fold do
+  def times(%{instructions: instructions} = map, times \\ nil) do
+    times = if times != nil, do: times, else: Enum.count(instructions)
+
+    next(map, times)
+  end
+
+  def fold(map, times) do
+    %{points: points, instructions: [{axis, dist} | rest]} = map
+
+    points = fold(points, axis, dist)
+
+    next(%{points: points, instructions: rest}, times)
+  end
+
+  def fold(points, axis, dist) do
+    points
+    |> Enum.map(fn {x, y} ->
+      {xd, yd} = if axis == "x", do: {dist, :ignore}, else: {:ignore, dist}
+      {reflect(x, xd), reflect(y, yd)}
+    end)
+  end
+
+  def reflect(num, :ignore), do: num
+
+  def reflect(num, dist) do
+    if num > dist do
+      dist - (num - dist)
+    else
+      num
+    end
+  end
+
+  def next(map, times) do
+    # Plot.m(map)
+    times = times - 1
+    if times >= 0, do: fold(map, times), else: map
+  end
+
+  def visibleDots(map) do
+    map.points |> Enum.into(MapSet.new()) |> MapSet.size() |> IO.inspect()
+    map
+  end
+end
+
+prep.(input)
+|> Fold.times(1)
+# Part 1
+|> Fold.visibleDots()
+|> Fold.times()
+# Part 2
+|> Plot.m()
+```
