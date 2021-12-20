@@ -1,0 +1,114 @@
+# Advent of code day 14
+
+## Setup
+
+```elixir
+input = File.read!("./advent-of-code-2021/day_14_input.txt")
+
+test_input = """
+NNCB
+
+CH -> B
+HH -> N
+CB -> H
+NH -> C
+HB -> C
+HC -> B
+HN -> C
+NN -> C
+BH -> H
+NC -> B
+NB -> B
+BN -> B
+BB -> N
+BC -> B
+CC -> N
+CN -> C
+"""
+
+prep = fn input ->
+  [template | rules] =
+    input
+    |> String.split("\n", trim: true)
+
+  rules =
+    Enum.reduce(rules, %{}, fn str, acc ->
+      list = str |> String.to_charlist()
+      Map.put(acc, Enum.slice(list, 0..1), Enum.slice(list, 6..7))
+    end)
+
+  %{template: String.to_charlist(template), rules: rules}
+end
+```
+
+## Part 1
+
+```elixir
+data = prep.(input) |> IO.inspect()
+
+insert = fn data ->
+  tmp =
+    data.template
+    # |> IO.inspect()
+    |> Enum.chunk_every(2, 1, :discard)
+    |> Enum.flat_map(&data.rules[&1])
+    # |> IO.inspect()
+    |> Enum.concat(' ')
+    |> then(&Enum.zip(data.template, &1))
+    |> Enum.flat_map(&Tuple.to_list/1)
+    |> Enum.take_while(fn el -> el != ?\s end)
+
+  # |> IO.inspect()
+
+  Map.put(data, :template, tmp)
+end
+
+Enum.reduce(1..10, data, fn _, d -> insert.(d) end)
+|> then(fn data -> data.template end)
+|> Enum.frequencies()
+|> Map.to_list()
+|> Enum.min_max_by(fn {_, count} -> count end)
+|> Tuple.to_list()
+|> Enum.map(fn {_, count} -> count end)
+|> Enum.reduce(fn a, b -> a - b end)
+```
+
+<!-- livebook:{"branch_parent_index":0} -->
+
+## part 2
+
+```elixir
+data = prep.(input)
+
+get_counts = fn template ->
+  template
+  |> Enum.chunk_every(2, 1, [])
+  |> Enum.reduce(%{}, fn pair, acc ->
+    Map.update(acc, pair, 1, fn total -> total + 1 end)
+  end)
+end
+
+template_counts = get_counts.(data.template)
+
+Enum.reduce(1..40, template_counts, fn _, t ->
+  Map.to_list(t)
+  |> Enum.flat_map(fn
+    {[left, right] = k, v} ->
+      [center] = data.rules[k]
+      [{[left, center], v}, {[center, right], v}]
+
+    {k, v} ->
+      [{k, v}]
+  end)
+  |> Enum.reduce(%{}, fn {k, v}, acc -> Map.update(acc, k, v, fn total -> total + v end) end)
+end)
+|> Map.to_list()
+|> Enum.map(fn
+  {[left, _right], v} -> {[left], v}
+  {k, v} -> {k, v}
+end)
+|> Enum.reduce(%{}, fn {k, v}, acc -> Map.update(acc, k, v, fn total -> total + v end) end)
+|> Map.to_list()
+|> Enum.min_max_by(fn {_, v} -> v end)
+|> then(fn {{_, min}, {_, max}} -> max - min end)
+```
