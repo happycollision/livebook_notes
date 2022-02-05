@@ -1,0 +1,315 @@
+# Post Playhouse Patron Addresses
+
+## Setup
+
+You'll paste in the data that was exported from the system. Ex: https://postplayhouse.slack.com/archives/C02QDQ1A6JJ/p1642467395024500
+
+```elixir
+Mix.install([{:kino, "0.5.0"}])
+input = Kino.Input.textarea("CSV text")
+```
+
+```elixir
+[headers | data] =
+  Kino.Input.read(input)
+  # removes the added `"="` in all the zip codes
+  |> String.replace(~s("="), ~s())
+  |> String.split("\n")
+  |> Enum.map(fn str ->
+    String.split(str, "\",\"")
+    |> Enum.map(fn
+      str -> String.replace(str, "\"", "") |> String.trim()
+    end)
+  end)
+
+data =
+  data
+  |> Enum.map(fn row ->
+    row = Enum.map(row, fn part -> String.trim(part) |> String.replace(~r/,$/, "") end)
+    Enum.zip([headers, row]) |> Enum.into(Map.new())
+  end)
+  |> Enum.map(fn patron ->
+    Map.update!(patron, "State", fn state ->
+      state |> String.upcase() |> String.replace(".", "")
+    end)
+  end)
+```
+
+Remove the unusable data
+
+```elixir
+data =
+  data
+  |> tap(&IO.inspect(Enum.count(&1)))
+  |> Enum.reject(fn datum -> datum["Address1"] == "" end)
+  |> tap(&IO.inspect(Enum.count(&1)))
+  |> Enum.reject(fn datum -> datum["City"] == "" end)
+  |> tap(&IO.inspect(Enum.count(&1)))
+  |> Enum.reject(fn datum -> datum["State"] == "" end)
+  |> tap(&IO.inspect(Enum.count(&1)))
+  |> Enum.reject(fn datum -> datum["Zip Code"] == "" end)
+  |> tap(&IO.inspect(Enum.count(&1)))
+```
+
+Further work on addresses. They need to contain a number or some version of PO Box
+
+```elixir
+r = ~r/\d|box ./i
+
+captured =
+  data
+  |> Enum.reject(fn patron ->
+    Regex.match?(r, patron["Address1"]) or Regex.match?(r, patron["Address2"])
+  end)
+
+data = data -- captured
+
+IO.inspect(Enum.count(data))
+
+:ok
+```
+
+Fix Ss bullshit
+
+```elixir
+defmodule SS do
+  def fix(p) do
+    last_name = p["Last Name"] |> fix_paren() |> fix_ss() |> fix_num()
+
+    if p["Last Name"] != last_name, do: IO.puts("#{p["Last Name"]} >>> #{last_name}")
+    Map.put(p, "Last Name", last_name)
+  end
+
+  def fix_paren(last_name) do
+    r = ~r/\(.*\)/
+
+    if Regex.match?(r, last_name) do
+      String.replace(last_name, r, "") |> String.trim()
+    else
+      last_name
+    end
+  end
+
+  def fix_ss(last_name) do
+    r = ~r/Ss.*/
+
+    if Regex.match?(r, last_name) do
+      String.replace(last_name, r, "") |> String.trim()
+    else
+      last_name
+    end
+  end
+
+  def fix_num(last_name) do
+    r = ~r/\d/
+
+    if Regex.match?(r, last_name) do
+      String.replace(last_name, r, "") |> String.trim()
+    else
+      last_name
+    end
+  end
+end
+
+data =
+  data
+  |> Enum.map(&SS.fix/1)
+
+:ok
+```
+
+Fix what can be fixed
+
+```elixir
+defmodule Fix do
+  @ss ~w(AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC)
+
+  def states_abbrev(), do: @ss
+
+  @states """
+          Alabama 
+          Alaska 
+          Arizona 
+          Arkansas 
+          California 
+          Colorado 
+          Connecticut 
+          Delaware 
+          Florida 
+          Georgia 
+          Hawaii 
+          Idaho 
+          Illinois
+          Indiana 
+          Iowa 
+          Kansas 
+          Kentucky 
+          Louisiana 
+          Maine 
+          Maryland 
+          Massachusetts 
+          Michigan 
+          Minnesota 
+          Mississippi 
+          Missouri 
+          Montana
+          Nebraska 
+          Nevada 
+          New Hampshire 
+          New Jersey 
+          New Mexico 
+          New York 
+          North Carolina 
+          North Dakota 
+          Ohio 
+          Oklahoma 
+          Oregon 
+          Pennsylvania
+          Rhode Island 
+          South Carolina 
+          South Dakota 
+          Tennessee 
+          Texas 
+          Utah 
+          Vermont 
+          Virginia 
+          Washington 
+          West Virginia 
+          Wisconsin 
+          Wyoming
+          District of Columbia
+          """
+          |> String.upcase()
+          |> String.split("\n", trim: true)
+          |> Enum.map(&String.trim/1)
+
+  @dict Enum.zip(@states, @ss) |> Enum.into(%{})
+
+  @ss_then_states Enum.zip(@ss, @states)
+                  |> Enum.map(fn {ss, state} -> "#{ss} - #{state}" end)
+
+  def patron(%{"Patron #" => "11214"} = p) do
+    Map.put(p, "State", "KS")
+  end
+
+  def patron(%{"Patron #" => "15833"} = p) do
+    Map.put(p, "State", "VA")
+  end
+
+  def patron(%{"Patron #" => "15734"} = p) do
+    Map.put(p, "State", "NE")
+  end
+
+  def patron(%{"Patron #" => "16692"} = p) do
+    Map.put(p, "State", "KS")
+  end
+
+  def patron(%{"Patron #" => "17883"} = p) do
+    Map.put(p, "State", "AZ")
+  end
+
+  def patron(%{"Patron #" => "17991"} = p) do
+    Map.put(p, "State", "NE")
+  end
+
+  def patron(%{"Patron #" => "18096"} = p) do
+    Map.put(p, "State", "IA")
+  end
+
+  def patron(%{"Patron #" => "18100"} = p) do
+    Map.put(p, "State", "NE")
+  end
+
+  def patron(%{"Patron #" => "16562"} = p) do
+    Map.put(p, "State", "NE")
+  end
+
+  def patron(%{"Patron #" => "16705"} = p) do
+    # Tricksy invisible character between the N and E...
+    Map.put(p, "State", "NE")
+  end
+
+  def patron(%{"Patron #" => "17277"} = p) do
+    Map.put(p, "State", "WY")
+  end
+
+  def patron(%{"Patron #" => "17726"} = p) do
+    Map.put(p, "State", "NE")
+  end
+
+  def patron(%{"Patron #" => "18154"} = p) do
+    Map.put(p, "State", "NE")
+  end
+
+  def patron(%{"Patron #" => "18434"} = p) do
+    Map.put(p, "State", "NE")
+  end
+
+  def patron(%{"Patron #" => "18701"} = p) do
+    Map.put(p, "State", "VA")
+  end
+
+  def patron(%{"Patron #" => "18735"} = p) do
+    Map.put(p, "State", "NE")
+  end
+
+  def patron(%{"Patron #" => "10719"} = p) do
+    Map.put(p, "State", "NE")
+  end
+
+  def patron(%{"Patron #" => "16097"} = p) do
+    Map.put(p, "State", "NE")
+  end
+
+  def patron(%{"State" => "ILL"} = p) do
+    Map.put(p, "State", "IL") |> patron()
+  end
+
+  def patron(%{"State" => state} = p) when state in @states do
+    Map.put(p, "State", @dict[state]) |> patron()
+  end
+
+  def patron(%{"State" => state} = p) when state in @ss_then_states do
+    Map.put(p, "State", String.slice(state, 0..1)) |> patron()
+  end
+
+  def patron(p), do: p
+end
+
+data =
+  data
+  |> Enum.map(&Fix.patron/1)
+  |> Enum.reject(fn datum -> datum["State"] not in Fix.states_abbrev() end)
+  |> tap(&IO.inspect(Enum.count(&1)))
+
+:ok
+```
+
+Print the final output
+
+```elixir
+fields =
+  """
+  First Name
+  Last Name
+  Address1
+  Address2
+  City
+  State
+  Zip Code
+  """
+  |> String.split("\n", trim: true)
+
+strings =
+  data
+  |> Enum.sort_by(fn patron -> patron["Last Name"] end)
+  |> Enum.map(fn p ->
+    Enum.map(fields, fn f -> ~s("#{p[f]}") end) |> Enum.join(", ")
+  end)
+
+fields |> Enum.join(", ") |> IO.puts()
+
+strings
+|> Enum.join("\n")
+|> IO.puts()
+```
