@@ -4,6 +4,8 @@
 
 This notebook takes the CSV output from the [Gifts by contact report](https://www.eleoonline.net/Pages/Reports/Gifts/GiftsbyContact.aspx) in Eleo, and creates the data we need for the program.
 
+You will also need to run the [anonymous donors report](https://www.eleoonline.net/Pages/Reports/ReportWriter/ContactReportWriter.aspx?CustomReportID=4), get that data as a CSV (the Excel button actually exports a CSV!), and copy/paste details as well.
+
 ```elixir
 Mix.install([
   {:kino, "~> 0.5.0"},
@@ -13,7 +15,11 @@ Mix.install([
 ```
 
 ```elixir
-data = Kino.Input.textarea("CSV content")
+data = Kino.Input.textarea("Gifts by contact report")
+```
+
+```elixir
+anon_donors = Kino.Input.textarea("Anon donors report")
 ```
 
 ## Munge
@@ -22,7 +28,8 @@ data = Kino.Input.textarea("CSV content")
 
 ```elixir
 data =
-  Kino.Input.read(data)
+  data
+  |> Kino.Input.read()
   |> String.split("\n")
   # Rid ourselves of the title of the table
   |> Enum.drop(1)
@@ -50,6 +57,13 @@ data =
   end)
   |> Enum.sort_by(fn x -> x["Amount"] end)
   |> Enum.group_by(fn x -> x["Campaign"] end)
+
+anon_donors =
+  anon_donors
+  |> Kino.Input.read()
+  |> String.split("\n")
+  |> CSV.decode!(headers: true)
+  |> Enum.to_list()
 ```
 
 From the above, we already have the data bucketed by Campaign (combining all Annual campaigns into one.)
@@ -57,6 +71,20 @@ From the above, we already have the data bucketed by Campaign (combining all Ann
 The next thing we need to do is combine all amounts for the same person so we have a total for all three years.
 
 ```elixir
+as_anon = fn donation when is_map(donation) ->
+  if Enum.any?(
+       anon_donors,
+       fn donor ->
+         "#{donor["Last Name"]}, #{donor["First Name"]}" == donation["Contact"] ||
+           "#{donor["Organization"]}" == donation["Contact"]
+       end
+     ) do
+    Map.update!(donation, "Contact", fn c -> "#{c} **Anonymous**" end)
+  else
+    donation
+  end
+end
+
 data =
   data
   |> Map.map(fn {_campaign, transactions} ->
@@ -69,6 +97,7 @@ data =
     # ungroup by contact
     |> Map.values()
     |> Enum.sort_by(fn x -> x["Amount"] end)
+    |> Enum.map(as_anon)
     |> Enum.reverse()
   end)
 ```
