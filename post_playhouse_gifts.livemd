@@ -1,0 +1,124 @@
+# Post Playhouse Gifts
+
+## Setup
+
+This notebook takes the CSV output from the [Gifts by contact report](https://www.eleoonline.net/Pages/Reports/Gifts/GiftsbyContact.aspx) in Eleo, and creates the data we need for the program.
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.5.0"},
+  {:csv, "~> 2.4"},
+  {:number, "~> 1.0"}
+])
+```
+
+```elixir
+data = Kino.Input.textarea("CSV content")
+```
+
+## Munge
+
+## Section
+
+```elixir
+data =
+  Kino.Input.read(data)
+  |> String.split("\n")
+  # Rid ourselves of the title of the table
+  |> Enum.drop(1)
+  # Rid ourselves of the total
+  |> Enum.drop(-1)
+  |> CSV.decode!(headers: true)
+  |> Enum.map(
+    &(Map.delete(&1, "Appeal")
+      |> Map.delete("Gift #")
+      |> Map.delete("Tran. Type")
+      |> Map.delete("Gift Date")
+      |> Map.delete("Fund")
+      |> Map.delete("Assigned To"))
+  )
+  |> Enum.map(fn x ->
+    # Amount becomes cents
+    Map.update!(x, "Amount", fn am ->
+      am |> String.replace(",", "") |> String.replace(".", "") |> String.to_integer()
+    end)
+  end)
+  |> Enum.map(fn x ->
+    Map.update!(x, "Campaign", fn c ->
+      if String.starts_with?(c, "Annual"), do: "Annual", else: c
+    end)
+  end)
+  |> Enum.sort_by(fn x -> x["Amount"] end)
+  |> Enum.group_by(fn x -> x["Campaign"] end)
+```
+
+From the above, we already have the data bucketed by Campaign (combining all Annual campaigns into one.)
+
+The next thing we need to do is combine all amounts for the same person so we have a total for all three years.
+
+```elixir
+data =
+  data
+  |> Map.map(fn {_campaign, transactions} ->
+    Enum.group_by(transactions, fn x -> x["Contact"] end)
+    |> Map.map(fn {_contact, transactions} ->
+      Enum.reduce(transactions, fn el, acc ->
+        Map.update!(acc, "Amount", fn amt -> amt + el["Amount"] end)
+      end)
+    end)
+    # ungroup by contact
+    |> Map.values()
+    |> Enum.sort_by(fn x -> x["Amount"] end)
+    |> Enum.reverse()
+  end)
+```
+
+## Output
+
+Running this block will format the data for CSV, write CSV's for each campaign, then print a simple, readable list as well.
+
+```elixir
+c_name = fn name -> if name == "", do: "unknown", else: name end
+
+readable =
+  data
+  # |> Map.map(fn {_key, list} ->
+  #   Enum.map(list, fn map ->
+  #     "#{Number.Currency.number_to_currency(map["Amount"] / 100, unit: "") |> String.pad_leading(11)}  #{map["Contact"]}"
+  #   end)
+  # end)
+  |> Map.to_list()
+  |> Enum.map(fn {campaign, donations} ->
+    {campaign,
+     Enum.map(donations, fn donation ->
+       Map.update!(donation, "Amount", fn cur_donation ->
+         Number.Currency.number_to_currency(cur_donation / 100, unit: "")
+       end)
+     end)}
+  end)
+
+# CSVs
+readable
+|> Enum.each(fn {campaign, donations} ->
+  csv =
+    donations
+    |> Enum.map(&Map.values/1)
+    |> CSV.encode()
+    |> Enum.to_list()
+
+  File.write("./#{c_name.(campaign)}.csv", [["Amount,", "Campaign,", "Contact\n"] | csv], [:utf8])
+end)
+
+# Print simple list
+readable
+|> Enum.map(fn {campaign, donations} ->
+  {campaign,
+   Enum.map(donations, fn donation ->
+     "#{donation["Amount"] |> String.pad_leading(11)} #{donation["Contact"]}"
+   end)}
+end)
+|> Enum.reduce("", fn {campaign, donations}, str ->
+  str <> "\n" <> "======#{c_name.(campaign)}=======" <> "\n" <> Enum.join(donations, "\n")
+end)
+|> IO.puts()
+```
