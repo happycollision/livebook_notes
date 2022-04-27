@@ -6,6 +6,8 @@ This notebook takes the CSV output from the [Gifts by contact report](https://ww
 
 You will also need to run the [anonymous donors report](https://www.eleoonline.net/Pages/Reports/ReportWriter/ContactReportWriter.aspx?CustomReportID=4), get that data as a CSV (the Excel button actually exports a CSV!), and copy/paste details as well.
 
+Finally, because Eleo sucks, we are recalculating everything... so skip this section and [head to the bottom](#all-donors-report-(aka-%22i'll-do-it-myself%22)).
+
 ```elixir
 Mix.install([
   {:kino, "~> 0.5.0"},
@@ -19,12 +21,12 @@ data = Kino.Input.textarea("Gifts by contact report")
 ```
 
 ```elixir
-anon_donors = Kino.Input.textarea("Anon donors report")
+anon_donors = Kino.Input.textarea("Anonymous donors report")
 ```
 
-## Munge
+<!-- livebook:{"branch_parent_index":0} -->
 
-## Section
+## Munge
 
 ```elixir
 data =
@@ -100,9 +102,15 @@ data =
     |> Enum.map(as_anon)
     |> Enum.reverse()
   end)
-```
 
-## Output
+# # grand total (should match the total that was stripped above)
+# data
+# |> Map.to_list()
+# |> Enum.flat_map(fn {_campaign, list} -> list end)
+# |> Enum.map(fn donation -> donation["Amount"] end)
+# |> Enum.sum()
+# |> then(&(&1 / 100))
+```
 
 Running this block will format the data for CSV, write CSV's for each campaign, then print a simple, readable list as well.
 
@@ -135,7 +143,8 @@ readable
     |> CSV.encode()
     |> Enum.to_list()
 
-  File.write("./#{c_name.(campaign)}.csv", [["Amount,", "Campaign,", "Contact\n"] | csv], [:utf8])
+  # Nope. This shit is wrong. See the notes on the next section
+  # File.write("./#{c_name.(campaign)}.csv", [["Amount,", "Campaign,", "Contact\n"] | csv], [:utf8])
 end)
 
 # Print simple list
@@ -144,6 +153,183 @@ readable
   {campaign,
    Enum.map(donations, fn donation ->
      "#{donation["Amount"] |> String.pad_leading(11)} #{donation["Contact"]}"
+   end)}
+end)
+|> Enum.reduce("", fn {campaign, donations}, str ->
+  str <> "\n" <> "======#{c_name.(campaign)}=======" <> "\n" <> Enum.join(donations, "\n")
+end)
+|> IO.puts()
+```
+
+<!-- livebook:{"branch_parent_index":0} -->
+
+## All donors report (AKA "I'll do it myself")
+
+### The Prelude
+
+Oh Eleo. How do I hate thee?
+
+Here is the text of a note I was writing to the support person before I decided to run my own report:
+
+> There are two reports that look nearly the same when you run them:
+> 
+> 1. [Donor Statement Report](https://www.eleoonline.net/Pages/Reports/Donor/DonorStatement.aspx)
+> 2. [Gifts by Contact Report](https://www.eleoonline.net/Pages/Reports/Gifts/GiftsbyContact.aspx)
+> 
+> Leaving all defaults and running each of the above reports yields these results:
+> 
+> 1. 47 pages, ??? gifts, total of 567,505.43
+> 2. 46 pages, 474 gifts, total of 808,651,68
+> 
+> Switching Anonymous to "Yes" yields the following
+> 
+> 1. two contacts, each donating 200, total of 400
+> 2. (same)
+> 
+> Switching Anonymous to "No" yields the following
+> 
+> 1. 45 pages, ??? gifts, total of 323,195.12
+> 2. 43 pages, 414 gifts, total of 533,341.37
+
+So here we are...
+
+### The Dance
+
+You'll need the [custom donor report](https://www.eleoonline.net/Pages/Reports/ReportWriter/GiftReportWriter.aspx?CustomReportID=5)
+
+```elixir
+all_donations = Kino.Input.textarea("Custom donors report")
+```
+
+```elixir
+all_donations =
+  all_donations
+  |> Kino.Input.read()
+  |> String.split("\n")
+  |> CSV.decode!(headers: true)
+  |> Enum.to_list()
+
+total = fn donations ->
+  donations
+  |> Enum.map(fn donation -> donation["Gift Amount"] |> String.to_float() end)
+  |> Enum.sum()
+  |> Float.round(2)
+end
+
+all_donations |> total.() |> IO.inspect(label: "Everything      ")
+
+all_donations
+|> Enum.reject(fn donation -> donation["Anonymous"] == "Yes" end)
+|> total.()
+|> IO.inspect(label: "Drop anon people")
+
+all_donations
+|> Enum.reject(fn donation -> donation["Anonymous Gift"] == "Yes" end)
+|> total.()
+|> IO.inspect(label: "Drop anon gifts ")
+```
+
+Yep. Matches the biggest report above. No idea how they got that crazy diff in amount for the other reports.
+
+```elixir
+contact_name = fn donation ->
+  if donation["Organization"] != "",
+    do: donation["Organization"],
+    else:
+      "#{donation["First Name"]}#{if donation["Middle Name"] != "", do: " " <> donation["Middle Name"], else: ""} #{donation["Last Name"]}"
+end
+
+campaign_name = fn name ->
+  if String.starts_with?(name, "Annual"),
+    do: "Annual Campaign",
+    else: name
+end
+
+all_donations =
+  all_donations
+  |> Enum.map(fn donation ->
+    donation
+    |> Map.put_new("Contact", contact_name.(donation))
+    |> Map.update!("Campaign", campaign_name)
+    |> Map.update!("Gift Amount", fn str ->
+      String.to_float(str) |> then(&(&1 * 100)) |> trunc()
+    end)
+    |> then(fn donation ->
+      {value, new_map} = Map.pop(donation, "Gift Amount")
+      Map.put(new_map, "Amount", value)
+    end)
+    |> then(fn donation ->
+      if donation["Anonymous Gift"] == "Yes",
+        # changing the Contact field to include the Anonymous Gift string 
+        # will keep it separate from the donor's other donations when we group by name
+        do: Map.update!(donation, "Contact", fn name -> name <> " ** Anonymous Gift **" end),
+        else: donation
+    end)
+  end)
+
+by_campaign = all_donations |> Enum.group_by(fn donation -> donation["Campaign"] end)
+
+summed_by_person =
+  by_campaign
+  |> Map.map(fn {_campaign, donations} ->
+    Enum.group_by(donations, fn donation -> donation["Contact"] end)
+    |> Map.map(fn {_person, donations} ->
+      donations
+      |> Enum.reduce(fn el, acc ->
+        Map.update!(acc, "Amount", fn amt -> amt + el["Amount"] end)
+      end)
+    end)
+    # ungroup by contact
+    |> Map.values()
+    |> Enum.sort_by(fn donation -> donation["Amount"] end)
+    |> Enum.reverse()
+  end)
+
+data = summed_by_person
+```
+
+```elixir
+c_name = fn name -> if name == "", do: "unknown", else: name end
+
+readable =
+  data
+  # |> Map.map(fn {_key, list} ->
+  #   Enum.map(list, fn map ->
+  #     "#{Number.Currency.number_to_currency(map["Amount"] / 100, unit: "") |> String.pad_leading(11)}  #{map["Contact"]}"
+  #   end)
+  # end)
+  |> Map.to_list()
+  |> Enum.map(fn {campaign, donations} ->
+    {campaign,
+     Enum.map(donations, fn donation ->
+       Map.update!(donation, "Amount", fn cur_donation ->
+         Number.Currency.number_to_currency(cur_donation / 100, unit: "")
+       end)
+     end)}
+  end)
+
+# CSVs
+readable
+|> Enum.each(fn {campaign, donations} ->
+  csv =
+    donations
+    |> Enum.map(fn donation ->
+      donation
+      |> Map.filter(fn {key, _val} -> Enum.member?(["Amount", "Campaign", "Contact"], key) end)
+      |> Map.values()
+    end)
+    |> CSV.encode()
+    |> Enum.to_list()
+
+  File.write("./#{c_name.(campaign)}.csv", [["Amount,", "Campaign,", "Contact\n"] | csv], [:utf8])
+end)
+
+# Print simple list
+readable
+|> Enum.map(fn {campaign, donations} ->
+  {campaign,
+   Enum.map(donations, fn donation ->
+     "#{donation["Amount"] |> String.pad_leading(11)} #{donation["Contact"]}#{if donation["Anonymous"] == "Yes", do: " ** Anonymous Donor **", else: ""}"
    end)}
 end)
 |> Enum.reduce("", fn {campaign, donations}, str ->
