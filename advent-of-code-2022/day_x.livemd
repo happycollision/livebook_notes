@@ -1,0 +1,43 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# Day 2
+
+```elixir
+defmodule AOC do
+  def get_input(day) when is_binary(day) do
+    read_or_create_file("day_#{day}_input")
+  end
+
+  def get_test_input(day) when is_binary(day) do
+    read_or_create_file("day_#{day}_test_input")
+  end
+
+  defp read_or_create_file(name) when is_binary(name) do
+    path = "#{__DIR__}/#{name}.txt"
+
+    {:ok, contents} =
+      with {:error, _} <- File.read(path),
+           :ok <- File.write!(path, "", [:utf8]) do
+        {:ok, ""}
+      end
+
+    contents
+  end
+end
+
+day = "01"
+input = AOC.get_test_input(day)
+# input = AOC.get_input(day)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+""
+```
+
+## Challenge 1
+
+```elixir
+
+```
