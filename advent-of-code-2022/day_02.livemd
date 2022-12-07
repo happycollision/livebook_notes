@@ -1,0 +1,120 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# Day 2
+
+```elixir
+defmodule AOC do
+  def get_input(day) when is_binary(day) do
+    read_or_create_file("day_#{day}_input")
+  end
+
+  def get_test_input(day) when is_binary(day) do
+    read_or_create_file("day_#{day}_test_input")
+  end
+
+  defp read_or_create_file(name) when is_binary(name) do
+    path = "#{__DIR__}/#{name}.txt"
+
+    {:ok, contents} =
+      with {:error, _} <- File.read(path),
+           :ok <- File.write!(path, "", [:utf8]) do
+        {:ok, ""}
+      end
+
+    contents
+  end
+end
+
+day = "02"
+input = AOC.get_test_input(day)
+input = AOC.get_input(day)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+"C X\nC Y\nC X\nB X\nB Z\nA Z\nC Y\nC Z\nB Z\nC X\nB Y\nC Y\nC Y\nA Y\nC Y\nC Y\nC Z\nC X\nB Z\nC Y\nA Y\nA Y\nC Z\nB Y\nA Y\nC Z\nC Y\nA Y\nA Y\nB Y\nC Y\nC Z\nC Y\nB X\nB Z\nC Y\nB Z\nA X\nC Z\nA Y\nB Y\nC Y\nC Y\nB Z\nB Y\nA Z\nC X\nC X\nC Y\nC X\nB Z\nA Y\nB X\nB Z\nC Z\nC X\nC X\nB Z\nA Y\nB Y\nC Y\nC Y\nA Y\nC X\nA Y\nB Z\nC Y\nC Y\nB Y\nC Y\nA Z\nA Z\nB X\nA Y\nC Y\nA Y\nC Y\nC Y\nC X\nC Y\nB Z\nC Y\nC Z\nC X\nB X\nC Y\nC Y\nC X\nC Z\nA Y\nC X\nB Z\nC X\nA Y\nB Y\nC Y\nA Y\nA Y\nA Y\nB Y\nC Y\nA Y\nA Y\nC Z\nC Y\nB Y\nC X\nC Y\nB Z\nB Z\nC X\nC Y\nC X\nC Y\nC Y\nA Y\nC Y\nC X\nC Y\nC Y\nB Y\nB Z\nA Y\nB Y\nA Y\nA Y\nC Y\nB X\nC Y\nC X\nA Y\nC X\nC X\nC Y\nC Y\nB Z\nC X\nA Y\nB Z\nC Z\nC X\nA Y\nB Z\nC Y\nB Y\nA Y\nA Y\nC Y\nB Y\nC Y\nC X\nC Y\nA Y\nC Y\nA Y\nB Y\nC X\nC Y\nC Y\nB Z\nB Z\nA Y\nC Y\nC Y\nC Y\nC Y\nA Y\nC X\nC Z\nC X\nA Y\nA Y\nA Y\nC Y\nB Z\nB Z\nC Y\nC Y\nB X\nC Y\nC Y\nB Z\nB X\nB Y\nC Y\nC Y\nC X\nB Y\nB Z\nB Z\nC Y\nC Y\nC X\nC X\nA Y\nC Y\nC Y\nB X\nB Z\nB X\nB Z\nB Y\nC X\nB X\nB Y\nB Z\nB Z\nB X\nB Z\nB Y\nC X\nC Y\nC X\nC X\nB Z\nC Y\nC Y\nC Y\nB Z\nC Y\nC X\nC Y\nC Y\nA Z\nC Y\nA Y\nC Y\nA Z\nA X\nC Y\nC Y\nC Y\nC Z\nB Z\nB Z\nC Y\nB Z\nB Z\nC X\nC Y\nA Y\nA Y\nC Y\nA Y\nC Y\nC Y\nB Y\nA Y\nC Y\nB Z\nA Y\nB Z\nC X\nC Y\nA Y\nB Z\nA Y\nC X\nC Y\nB Y\nC Y\nA Z\nB Z\nB X\nC Y\nA Y\nA Z\nC X\nA Y\nB Z\nA Y\nB Y\nC Y\nC Y\nB Z\nB Z\nC X\nB Z\nC X\nC Z\nC Y\nC X\nA Y\nC X\nA Y\nA Y\nB Z\nB Z\nB Z\nA Y\nA Y\nC Y\nA Y\nB Z\nC X\nC Y\nC Y\nC Y\nB Y\nA Y\nC Z\nC Y\nA Y\nA Y\nB Z\nC Y\nC Y\nC Y\nB Z\nC Y\nC Y\nA Y\nA Y\nC Y\nC X\nB Z\nB Z\nC X\nC X\nC Z\nA Y\nC Y\nA Y\nA Y\nC X\nA Z\nB Y\nA Y\nC X\nA Y\nC X\nC X\nA Y\nA Y\nC X\nB Y\nB Z\nC Y\nC Z\nC Y\nC Y\nB Z\nC Y\nA Y\nA X\nB Y\nC Y\nA Y\nC Y\nC Y\nC Y\nA Y\nC Y\nA Y\nC Y\nB Z\nA Y\nC X\nC Y\nA Y\nC Y\nA Y\nA Y\nA Y\nB Z\nC Y\nB Z\nA Y\nC Y\nA Y\nC Y\nC X\nB Z\nA Y\nC X\nB Z\nB Y\nC Y\nC Z\nC Y\nB Y\nB Y\nA Y\nA Y\nC X\nB Y\nA Y\nC Y\nB X\nC X\nA Y\nC Y\nA Y\nC Y\nB Z\nA Z\nB Z\nB Z\nA Z\nC Y\nC Y\nC X\nB Y\nC Y\nA Y\nC Y\nC Y\nB Y\nB Z\nC Y\nC X\nA Y\nC X\nC X\nC Y\nB Y\nC Y\nB Z\nC Y\nA Y\nA Y\nC Y\nC X\nC X\nC X\nC Y\nC X\nC Y\nC Y\nA Y\nC Y\nC X\nC Y\nC X\nC X\nC X\nA Y\nB Y\nC Y\nC Y\nC Y\nC Y\nC Y\nA Y\nA X\nB Z\nC X\nC Y\nC Y\nB Z\nA Y\nA Y\nB X\nB Z\nC Y\nC Y\nB Z\nA Y\nA Y\nA Y\nC Y\nC Y\nA Y\nA Y\nC Y\nC Y\nC X\nC X\nC X\nB Z\nC Z\nC X\nA Z\nC Y\nC X\nA Y\nB Y\nB Z\nC X\nC Y\nC Y\nC Z\nC Y\nC X\nA Z\nC Y\nA X\nB Y\nC Y\nC Y\nC Y\nC X\nB Y\nB Y\nC X\nB X\nA Y\nC Y\nC Y\nC Y\nB X\nC Y\nA Y\nC Y\nC Y\nB Z\nC X\nB X\nC Z\nC Y\nA Y\nB Y\nB Z\nC Z\nC X\nC X\nA Y\nA Y\nB Z\nA Y\nC X\nB Y\nC Y\nA Y\nB X\nA Y\nA Y\nC Z\nC Y\nC Z\nB Z\nA X\nC Y\nB Y\nC Y\nB Z\nB Y\nC Y\nA Y\nB Z\nB Z\nC X\nB Z\nC Y\nB Z\nB Z\nC Y\nC Y\nB Z\nC Z\nC Y\nB Z\nC Y\nB X\nA Y\nB Z\nA Y\nC Y\nA Y\nC Y\nC Y\nB Y\nB Z\nB Z\nC Y\nA Y\nB Z\nC X\nC Y\nC Y\nA Y\nC Y\nC Y\nC X\nA Y\nC Y\nC Y\nA Y\nC X\nA Y\nA Y\nA Y\nC Y\nC Y\nA Y\nB Z\nA Y\nB Y\nA Y\nA Y\nC Y\nC Y\nC Z\nA Y\nC Y\nB Z\nA Y\nC Y\nC Z\nC Y\nC Y\nB Z\nC Y\nC Y\nB Z\nB Y\nC Y\nA Y\nC X\nC Y\nC Z\nC Z\nC X\nC X\nC X\nC Z\nC Y\nB Z\nA Y\nB Z\nB Z\nA Y\nC Y\nC Y\nC Y\nB X\nC Y\nA Y\nA Z\nB Y\nB Y\nA Y\nB Z\nA Y\nB Y\nC Z\nC Y\nC Y\nC Y\nB Z\nB Z\nB Z\nC Y\nC Y\nA Y\nC X\nC X\nA Y\nC Y\nC Y\nC Y\nC Y\nC X\nC Y\nC Y\nC Y\nC X\nA Z\nB Y\nC Y\nA Y\nA Y\nB Z\nA Z\nC Y\nC Y\nC Y\nC X\nB X\nB Y\nC Y\nA Y\nA Z\nB X\nC Y\nC Y\nB Z\nA Y\nA Y\nB Z\nB Z\nC Y\nC Y\nC X\nB Y\nB Z\nC Y\nB Y\nC Y\nA Y\nC X\nC X\nB Z\nA Y\nC Y\nB Z\nC X\nC Y\nB Y\nB Z\nA Z\nB Y\nB Y\nC X\nC Y\nA Z\nC X\nC X\nA Y\nA Y\nC X\nA Y\nB Y\nB Z\nA Y\nB Z\nB X\nC Y\nC Y\nC X\nB Z\nA Y\nB Y\nA Y\nC Y\nC Z\nB Z\nC Y\nA Y\nC Y\nC Z\nA Z\nB Z\nB X\nC Y\nC Y\nB Y\nC X\nB Y\nB Z\nB Z\nB X\nB Y\nC X\nC Y\nC X\nC Y\nA Y\nA Y\nC Y\nA Y\nC Y\nC X\nC Y\nA Y\nB Z\nC X\nC Y\nB Z\nC Y\nC Y\nB Y\nB Z\nA X\nC Y\nB Y\nB Y\nB Z\nC Y\nB Z\nA Y\nC Y\nB Y\nC Y\nA Y\nC Y\nB Z\nC Y\nA Y\nA Y\nC Y\nA Y\nC Y\nA Y\nA Y\nB Z\nC X\nC Y\nB Z\nC Y\nA X\nA Z\nC Y\nC X\nC X\nC Y\nC Y\nB Z\nA Z\nA Y\nC Y\nB Z\nA Y\nA Y\nC Y\nB Z\nA Y\nC X\nA Y\nA Y\nC X\nB Z\nB X\nA X\nA Y\nB Y\nA X\nB X\nC X\nC Y\nA Y\nC Y\nA Y\nA Y\nC X\nB Y\nC X\nB Y\nC Y\nC Y\nA Y\nB Z\nA Z\nB Y\nC X\nC Y\nC Y\nB Z\nC Z\nA Y\nA Y\nA Z\nC Y\nA Y\nB Z\nC Y\nC Y\nB Y\nA Y\nA Y\nC Y\nC X\nC X\nB Y\nB Z\nC Y\nB Y\nB Z\nC Y\nA Y\nB Z\nA Y\nA Y\nA Z\nC X\nB Z\nC Y\nB Z\nA Y\nC X\nC Y\nC Y\nB X\nB Z\nA Y\nA Y\nA Y\nA Y\nA Y\nC Y\nA Y\nA Y\nC X\nC Y\nC Z\nB Z\nA Z\nC Z\nA Y\nB Z\nB Y\nA Y\nC Y\nB Z\nA Y\nC Y\nC Y\nA Y\nC Y\nB Z\nB Y\nB Z\nC Y\nC Y\nC Y\nA Z\nC X\nB X\nB Z\nC Z\nC Y\nC Y\nC Y\nC X\nA Y\nC Y\nA Y\nA Y\nB Z\nA Y\nC Y\nC Y\nA Y\nC Y\nA Z\nB X\nA Y\nC Y\nA Y\nA Z\nA Y\nA Y\nB Z\nB Y\nB Z\nC Y\nB Z\nC X\nA Y\nC Y\nA Y\nA Y\nA Y\nB Z\nB Z\nC Y\nB Z\nB Y\nC X\nA Y\nC Y\nA Y\nB Z\nC X\nB Y\nC Y\nB Z\nC Y\nA Y\nC Y\nC Y\nB Y\nB Z\nC Y\nB Z\nB Y\nC Y\nC X\nA Z\nC Z\nC Y\nC Y\nA Y\nA Y\nC X\nC Y\nC Y\nC Y\nC X\nB Z\nC X\nC Y\nA Y\nA Y\nB Z\nA Y\nA Y\nC Y\nA Y\nB Z\nC X\nC Y\nC Y\nC Y\nC Y\nC X\nB Z\nA Y\nB Y\nC Y\nC X\nB Z\nC Y\nA Y\nA Y\nB Z\nC Y\nA Y\nC Z\nC X\nB Z\nC Y\nA Z\nB Z\nA Y\nA Y\nC Y\nB Z\nB Z\nA Y\nC Y\nB Y\nC Y\nA Y\n" <> ...
+```
+
+## Challenge 1
+
+```elixir
+defmodule RPS do
+  # 4, 7, 10
+  def i_play(<<_::utf8, _::utf8>> <> "X"), do: 1
+  # 5, 8, 11
+  def i_play(<<_::utf8, _::utf8>> <> "Y"), do: 2
+  # 6, 9, 12
+  def i_play(<<_::utf8, _::utf8>> <> "Z"), do: 3
+
+  def u_play("A" <> _), do: 3
+  def u_play("B" <> _), do: 6
+  def u_play("C" <> _), do: 9
+
+  def we_play(game) when is_binary(game), do: we_play(i_play(game) + u_play(game))
+
+  # Win
+  def we_play(10), do: 1 + 6
+  def we_play(5), do: 2 + 6
+  def we_play(9), do: 3 + 6
+
+  # Lose
+  def we_play(7), do: 1 + 0
+  def we_play(11), do: 2 + 0
+  def we_play(6), do: 3 + 0
+
+  # Draw
+  def we_play(4), do: 1 + 3
+  def we_play(8), do: 2 + 3
+  def we_play(12), do: 3 + 3
+end
+
+games = input |> String.split("\n")
+games |> Enum.map(&RPS.we_play/1) |> Enum.sum()
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+13484
+```
+
+## Challenge 2
+
+```elixir
+defmodule RPS do
+  # 4, 7, 10
+  def i_play(<<_::utf8, _::utf8>> <> "X"), do: 1
+  # 5, 8, 11
+  def i_play(<<_::utf8, _::utf8>> <> "Y"), do: 2
+  # 6, 9, 12
+  def i_play(<<_::utf8, _::utf8>> <> "Z"), do: 3
+
+  def u_play("A" <> _), do: 3
+  def u_play("B" <> _), do: 6
+  def u_play("C" <> _), do: 9
+
+  def we_play(game) when is_binary(game), do: we_play(i_play(game) + u_play(game))
+
+  def we_play(4), do: 3 + 0
+  def we_play(7), do: 1 + 0
+  def we_play(10), do: 2 + 0
+
+  def we_play(5), do: 1 + 3
+  def we_play(8), do: 2 + 3
+  def we_play(11), do: 3 + 3
+
+  def we_play(6), do: 2 + 6
+  def we_play(9), do: 3 + 6
+  def we_play(12), do: 1 + 6
+end
+
+games = input |> String.split("\n")
+games |> Enum.map(&RPS.we_play/1) |> Enum.sum()
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+13433
+```
