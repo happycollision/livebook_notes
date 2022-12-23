@@ -1,0 +1,145 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# EOM averages
+
+```elixir
+name = "Deidentified Public Use Baseline Episode File-CY 2020.csv"
+input = "#{__DIR__}/#{name}" |> File.stream!()
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+%File.Stream{
+  path: "/Users/dondenton/GitProjects/livebook_notes/eom_calculator/Deidentified Public Use Baseline Episode File-CY 2020.csv",
+  modes: [:raw, :read_ahead, :binary],
+  line_or_bytes: :line,
+  raw: true
+}
+```
+
+## prep the data
+
+```elixir
+values =
+  input
+  |> Stream.map(&String.split(&1, ",", trim: true))
+
+[header | _] =
+  values
+  |> Stream.take(1)
+  |> Enum.into([])
+
+data_stream =
+  values
+  |> Stream.drop(1)
+  |> Stream.map(fn row ->
+    Enum.zip(header, row) |> Enum.into(%{})
+  end)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Stream<[
+  enum: %File.Stream{
+    path: "/Users/dondenton/GitProjects/livebook_notes/eom_calculator/Deidentified Public Use Baseline Episode File-CY 2020.csv",
+    modes: [:raw, :read_ahead, :binary],
+    line_or_bytes: :line,
+    raw: true
+  },
+  funs: [#Function<48.124013645/1 in Stream.map/2>, #Function<34.124013645/1 in Stream.drop/2>,
+   #Function<48.124013645/1 in Stream.map/2>]
+]>
+```
+
+## filtering
+
+This section is not useful for anything other than confirming I am doing things correctly.
+
+```elixir
+row_filter = fn key_filter_predicate, value_predicate ->
+  fn row ->
+    row
+    |> Map.keys()
+    |> Enum.filter(key_filter_predicate)
+    |> Enum.map(&Map.get(row, &1))
+    |> Enum.any?(value_predicate)
+  end
+end
+
+is_female =
+  row_filter.(
+    &String.starts_with?(&1, "female_age_"),
+    fn x -> x === "1" end
+  )
+
+is_male =
+  row_filter.(
+    &String.starts_with?(&1, "male_age_"),
+    fn x -> x === "1" end
+  )
+
+# Proof that they are mutually exclusive, no need to run again.
+prove = fn ->
+  Stream.zip([data_stream |> Stream.map(is_female), data_stream |> Stream.map(is_male)])
+  |> Enum.all?(fn {b1, b2} -> b1 == !b2 end)
+end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[female: 99622, male: 85150]
+```
+
+<!-- livebook:{"branch_parent_index":0} -->
+
+## averages
+
+Gets all the counts for each cancer type and then divides the Raw Total Standardized cost by those counts.
+
+The result is
+
+```
+{type_of_cancer, {count, cost_per_person}}
+```
+
+```elixir
+data_stream =
+  data_stream
+  |> Enum.reduce(%{}, fn row, acc ->
+    Map.update(acc, row["cancer_type"], {0, 0}, fn
+      {count, cost} ->
+        num =
+          if(String.contains?(row["raw_total_std"], "."),
+            do: row["raw_total_std"],
+            else: row["raw_total_std"] <> ".00"
+          )
+          |> String.to_float()
+
+        [num | _] = Float.round(num * 100) |> Float.to_string() |> String.split(".")
+        num = num |> String.to_integer()
+
+        {count + 1, cost + num}
+    end)
+  end)
+  |> then(&Map.to_list/1)
+  |> Enum.map(fn {kind, {count, cost}} ->
+    {kind, {count, (cost / 100 / count) |> Float.round(2)}}
+  end)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+[
+  {"Breast Cancer", {40320, 47887.36}},
+  {"Chronic Leukemia", {14931, 58847.34}},
+  {"Lung Cancer", {41387, 65340.92}},
+  {"Lymphoma", {21582, 56655.6}},
+  {"Multiple Myeloma", {27421, 87998.36}},
+  {"Prostate Cancer", {18754, 49102.89}},
+  {"Small Intestine / Colorectal Cancer", {20370, 39206.69}}
+]
+```
