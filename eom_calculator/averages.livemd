@@ -41,21 +41,12 @@ data_stream =
 <!-- livebook:{"output":true} -->
 
 ```
-#Stream<[
-  enum: %File.Stream{
-    path: "/Users/dondenton/GitProjects/livebook_notes/eom_calculator/Deidentified Public Use Baseline Episode File-CY 2020.csv",
-    modes: [:raw, :read_ahead, :binary],
-    line_or_bytes: :line,
-    raw: true
-  },
-  funs: [#Function<48.124013645/1 in Stream.map/2>, #Function<34.124013645/1 in Stream.drop/2>,
-   #Function<48.124013645/1 in Stream.map/2>]
-]>
+"Northeast Region"
 ```
 
 ## filtering
 
-This section is not useful for anything other than confirming I am doing things correctly.
+Getting some filtering functions ready to go
 
 ```elixir
 row_filter = fn key_filter_predicate, value_predicate ->
@@ -68,32 +59,64 @@ row_filter = fn key_filter_predicate, value_predicate ->
   end
 end
 
-is_female =
+predicate_via_kv = fn {k, v} ->
   row_filter.(
-    &String.starts_with?(&1, "female_age_"),
-    fn x -> x === "1" end
+    &String.equivalent?(&1, k),
+    fn x -> x === v end
   )
-
-is_male =
-  row_filter.(
-    &String.starts_with?(&1, "male_age_"),
-    fn x -> x === "1" end
-  )
-
-# Proof that they are mutually exclusive, no need to run again.
-prove = fn ->
-  Stream.zip([data_stream |> Stream.map(is_female), data_stream |> Stream.map(is_male)])
-  |> Enum.all?(fn {b1, b2} -> b1 == !b2 end)
 end
+
+is_midwest = predicate_via.("pgp_id_region", "Midwest Region")
+is_northeast = predicate_via.("pgp_id_region", "Northeast Region")
+is_south = predicate_via.("pgp_id_region", "South Region")
+is_west = predicate_via.("pgp_id_region", "West Region")
+is_rural = predicate_via.("forhp_rural_ind", "1")
+is_not_rural = predicate_via.("forhp_rural_ind", "0")
+
+national = {"National, Both", []}
+national_rural = {"National, Rural", [is_rural]}
+national_urban = {"National, Urban", [is_not_rural]}
+
+midwest = {"Midwest, Both", [is_midwest]}
+midwest_rural = {"Midwest, Rural", [is_midwest, is_rural]}
+midwest_urban = {"Midwest, Urban", [is_midwest, is_not_rural]}
+
+south = {"South, Both", [is_south]}
+south_rural = {"South, Rural", [is_south, is_rural]}
+south_urban = {"South, Urban", [is_south, is_not_rural]}
+
+northeast = {"Northeast, Both", [is_northeast]}
+northeast_rural = {"Northeast, Rural", [is_northeast, is_rural]}
+northeast_urban = {"Northeast, Urban", [is_northeast, is_not_rural]}
+
+west = {"west, Both", [is_west]}
+west_rural = {"west, Rural", [is_west, is_rural]}
+west_urban = {"west, Urban", [is_west, is_not_rural]}
+
+predicate_groupings = [
+  national,
+  national_rural,
+  national_urban,
+  midwest,
+  midwest_rural,
+  midwest_urban,
+  south,
+  south_rural,
+  south_urban,
+  northeast,
+  northeast_rural,
+  northeast_urban,
+  west,
+  west_rural,
+  west_urban
+]
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-[female: 99622, male: 85150]
+#Function<42.3316493/1 in :erl_eval.expr/6>
 ```
-
-<!-- livebook:{"branch_parent_index":0} -->
 
 ## averages
 
@@ -106,40 +129,88 @@ The result is
 ```
 
 ```elixir
-data_stream =
-  data_stream
-  |> Enum.reduce(%{}, fn row, acc ->
-    Map.update(acc, row["cancer_type"], {0, 0}, fn
-      {count, cost} ->
-        num =
-          if(String.contains?(row["raw_total_std"], "."),
-            do: row["raw_total_std"],
-            else: row["raw_total_std"] <> ".00"
-          )
-          |> String.to_float()
+to_averages = fn
+  data_stream ->
+    data_stream
+    |> Enum.reduce(%{}, fn row, acc ->
+      Map.update(acc, row["cancer_type"], {0, 0}, fn
+        {count, cost} ->
+          num =
+            if(String.contains?(row["raw_total_std"], "."),
+              do: row["raw_total_std"],
+              else: row["raw_total_std"] <> ".00"
+            )
+            |> String.to_float()
 
-        [num | _] = Float.round(num * 100) |> Float.to_string() |> String.split(".")
-        num = num |> String.to_integer()
+          [num | _] = Float.round(num * 100) |> Float.to_string() |> String.split(".")
+          num = num |> String.to_integer()
 
-        {count + 1, cost + num}
+          {count + 1, cost + num}
+      end)
     end)
-  end)
-  |> then(&Map.to_list/1)
-  |> Enum.map(fn {kind, {count, cost}} ->
-    {kind, {count, (cost / 100 / count) |> Float.round(2)}}
-  end)
+    |> then(&Map.to_list/1)
+    |> Enum.map(fn {kind, {count, cost}} ->
+      {kind, {count, (cost / 100 / count) |> Float.round(2)}}
+    end)
+end
+
+[
+  national: to_averages.(data_stream),
+  midwest: data_stream |> Stream.filter(is_midwest) |> to_averages.(),
+  west: data_stream |> Stream.filter(is_west) |> to_averages.(),
+  northeast: data_stream |> Stream.filter(is_northeast) |> to_averages.(),
+  south: data_stream |> Stream.filter(is_south) |> to_averages.()
+]
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
 [
-  {"Breast Cancer", {40320, 47887.36}},
-  {"Chronic Leukemia", {14931, 58847.34}},
-  {"Lung Cancer", {41387, 65340.92}},
-  {"Lymphoma", {21582, 56655.6}},
-  {"Multiple Myeloma", {27421, 87998.36}},
-  {"Prostate Cancer", {18754, 49102.89}},
-  {"Small Intestine / Colorectal Cancer", {20370, 39206.69}}
+  national: [
+    {"Breast Cancer", {40320, 47887.36}},
+    {"Chronic Leukemia", {14931, 58847.34}},
+    {"Lung Cancer", {41387, 65340.92}},
+    {"Lymphoma", {21582, 56655.6}},
+    {"Multiple Myeloma", {27421, 87998.36}},
+    {"Prostate Cancer", {18754, 49102.89}},
+    {"Small Intestine / Colorectal Cancer", {20370, 39206.69}}
+  ],
+  midwest: [
+    {"Breast Cancer", {8653, 49007.68}},
+    {"Chronic Leukemia", {3615, 59504.91}},
+    {"Lung Cancer", {10002, 65192.76}},
+    {"Lymphoma", {4892, 57181.05}},
+    {"Multiple Myeloma", {6140, 87094.63}},
+    {"Prostate Cancer", {4241, 48607.69}},
+    {"Small Intestine / Colorectal Cancer", {4740, 40163.45}}
+  ],
+  west: [
+    {"Breast Cancer", {8010, 47304.54}},
+    {"Chronic Leukemia", {2755, 59229.77}},
+    {"Lung Cancer", {6736, 68128.62}},
+    {"Lymphoma", {4216, 57399.92}},
+    {"Multiple Myeloma", {5202, 88751.64}},
+    {"Prostate Cancer", {4182, 49121.62}},
+    {"Small Intestine / Colorectal Cancer", {3676, 39189.98}}
+  ],
+  northeast: [
+    {"Breast Cancer", {7522, 47548.2}},
+    {"Chronic Leukemia", {2976, 59073.06}},
+    {"Lung Cancer", {7856, 65479.17}},
+    {"Lymphoma", {4182, 57627.45}},
+    {"Multiple Myeloma", {5461, 90802.26}},
+    {"Prostate Cancer", {3876, 46550.58}},
+    {"Small Intestine / Colorectal Cancer", {3671, 40184.65}}
+  ],
+  south: [
+    {"Breast Cancer", {16073, 47785.74}},
+    {"Chronic Leukemia", {5568, 58117.49}},
+    {"Lung Cancer", {16759, 64247.92}},
+    {"Lymphoma", {8272, 55507.36}},
+    {"Multiple Myeloma", {10572, 86775.9}},
+    {"Prostate Cancer", {6426, 51004.09}},
+    {"Small Intestine / Colorectal Cancer", {8251, 38275.05}}
+  ]
 ]
 ```
