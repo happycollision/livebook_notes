@@ -25,7 +25,7 @@ values =
   input
   |> Stream.map(&String.split(&1, ",", trim: true))
 
-[header | _] =
+[header] =
   values
   |> Stream.take(1)
   |> Enum.into([])
@@ -36,12 +36,14 @@ data_stream =
   |> Stream.map(fn row ->
     Enum.zip(header, row) |> Enum.into(%{})
   end)
+
+data_stream |> Enum.count()
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-"Northeast Region"
+184772
 ```
 
 ## filtering
@@ -59,21 +61,21 @@ row_filter = fn key_filter_predicate, value_predicate ->
   end
 end
 
-predicate_via_kv = fn {k, v} ->
+predicate_via_kv = fn k, v ->
   row_filter.(
-    &String.equivalent?(&1, k),
+    &String.equivalent?(String.downcase(&1), String.downcase(k)),
     fn x -> x === v end
   )
 end
 
-is_midwest = predicate_via.("pgp_id_region", "Midwest Region")
-is_northeast = predicate_via.("pgp_id_region", "Northeast Region")
-is_south = predicate_via.("pgp_id_region", "South Region")
-is_west = predicate_via.("pgp_id_region", "West Region")
-is_rural = predicate_via.("forhp_rural_ind", "1")
-is_not_rural = predicate_via.("forhp_rural_ind", "0")
+is_midwest = predicate_via_kv.("pgp_id_region", "Midwest Region")
+is_northeast = predicate_via_kv.("pgp_id_region", "Northeast Region")
+is_south = predicate_via_kv.("pgp_id_region", "South Region")
+is_west = predicate_via_kv.("pgp_id_region", "West Region")
+is_rural = predicate_via_kv.("forhp_rural_ind", "1")
+is_not_rural = predicate_via_kv.("forhp_rural_ind", "0")
 
-national = {"National, Both", []}
+national = {"National, Both", [fn _ -> true end]}
 national_rural = {"National, Rural", [is_rural]}
 national_urban = {"National, Urban", [is_not_rural]}
 
@@ -89,128 +91,293 @@ northeast = {"Northeast, Both", [is_northeast]}
 northeast_rural = {"Northeast, Rural", [is_northeast, is_rural]}
 northeast_urban = {"Northeast, Urban", [is_northeast, is_not_rural]}
 
-west = {"west, Both", [is_west]}
-west_rural = {"west, Rural", [is_west, is_rural]}
-west_urban = {"west, Urban", [is_west, is_not_rural]}
+west = {"West, Both", [is_west]}
+west_rural = {"West, Rural", [is_west, is_rural]}
+west_urban = {"West, Urban", [is_west, is_not_rural]}
 
-predicate_groupings = [
-  national,
-  national_rural,
-  national_urban,
-  midwest,
-  midwest_rural,
-  midwest_urban,
-  south,
-  south_rural,
-  south_urban,
-  northeast,
-  northeast_rural,
-  northeast_urban,
-  west,
-  west_rural,
-  west_urban
-]
+predicate_groupings =
+  [
+    national,
+    national_rural,
+    national_urban,
+    midwest,
+    midwest_rural,
+    midwest_urban,
+    south,
+    south_rural,
+    south_urban,
+    northeast,
+    northeast_rural,
+    northeast_urban,
+    west,
+    west_rural,
+    west_urban
+  ]
+  |> Enum.map(fn {name, predicates} ->
+    {name, &Enum.all?(predicates, fn pred -> pred.(&1) end)}
+  end)
+
+defmodule MyMap do
+  def update(map, key, default, fun) when is_map(map) and is_function(fun, 1) do
+    Map.put(map, key, Map.get(map, key, default) |> fun.())
+  end
+end
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-#Function<42.3316493/1 in :erl_eval.expr/6>
+{:module, MyMap, <<70, 79, 82, 49, 0, 0, 7, ...>>, {:update, 4}}
 ```
 
 ## averages
 
 Gets all the counts for each cancer type and then divides the Raw Total Standardized cost by those counts.
 
-The result is
-
-```
-{type_of_cancer, {count, cost_per_person}}
-```
-
 ```elixir
-to_averages = fn
-  data_stream ->
-    data_stream
-    |> Enum.reduce(%{}, fn row, acc ->
-      Map.update(acc, row["cancer_type"], {0, 0}, fn
-        {count, cost} ->
-          num =
-            if(String.contains?(row["raw_total_std"], "."),
-              do: row["raw_total_std"],
-              else: row["raw_total_std"] <> ".00"
-            )
-            |> String.to_float()
+data_stream
+|> Enum.reduce(%{}, fn row, tent ->
+  pennies =
+    if(String.contains?(row["raw_total_std"], "."),
+      do: row["raw_total_std"],
+      else: row["raw_total_std"] <> ".00"
+    )
+    |> String.to_float()
+    |> then(&(100 * &1))
+    |> Kernel.round()
 
-          [num | _] = Float.round(num * 100) |> Float.to_string() |> String.split(".")
-          num = num |> String.to_integer()
-
-          {count + 1, cost + num}
+  predicate_groupings
+  |> Enum.reduce(tent, fn {grp_name, predicate}, tent ->
+    if predicate.(row) do
+      MyMap.update(tent, grp_name, %{}, fn section ->
+        MyMap.update(section, row["cancer_type"], {0, 0}, fn
+          {count, running_total} ->
+            {count + 1, running_total + pennies}
+        end)
       end)
-    end)
-    |> then(&Map.to_list/1)
-    |> Enum.map(fn {kind, {count, cost}} ->
-      {kind, {count, (cost / 100 / count) |> Float.round(2)}}
-    end)
-end
-
-[
-  national: to_averages.(data_stream),
-  midwest: data_stream |> Stream.filter(is_midwest) |> to_averages.(),
-  west: data_stream |> Stream.filter(is_west) |> to_averages.(),
-  northeast: data_stream |> Stream.filter(is_northeast) |> to_averages.(),
-  south: data_stream |> Stream.filter(is_south) |> to_averages.()
-]
+    else
+      tent
+    end
+  end)
+end)
+|> Map.to_list()
+|> Enum.map(fn {name, details} ->
+  {name,
+   details
+   |> Map.to_list()
+   |> Enum.map(fn {cancer, {count, total_cost}} ->
+     {cancer,
+      %{
+        "people" => count,
+        "total_cost" => (total_cost / 100) |> Float.round(2),
+        "avg" => (total_cost / count / 100) |> Float.round(2)
+      }}
+   end)
+   |> Enum.into(%{})}
+end)
+|> Enum.into(%{})
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-[
-  national: [
-    {"Breast Cancer", {40320, 47887.36}},
-    {"Chronic Leukemia", {14931, 58847.34}},
-    {"Lung Cancer", {41387, 65340.92}},
-    {"Lymphoma", {21582, 56655.6}},
-    {"Multiple Myeloma", {27421, 87998.36}},
-    {"Prostate Cancer", {18754, 49102.89}},
-    {"Small Intestine / Colorectal Cancer", {20370, 39206.69}}
-  ],
-  midwest: [
-    {"Breast Cancer", {8653, 49007.68}},
-    {"Chronic Leukemia", {3615, 59504.91}},
-    {"Lung Cancer", {10002, 65192.76}},
-    {"Lymphoma", {4892, 57181.05}},
-    {"Multiple Myeloma", {6140, 87094.63}},
-    {"Prostate Cancer", {4241, 48607.69}},
-    {"Small Intestine / Colorectal Cancer", {4740, 40163.45}}
-  ],
-  west: [
-    {"Breast Cancer", {8010, 47304.54}},
-    {"Chronic Leukemia", {2755, 59229.77}},
-    {"Lung Cancer", {6736, 68128.62}},
-    {"Lymphoma", {4216, 57399.92}},
-    {"Multiple Myeloma", {5202, 88751.64}},
-    {"Prostate Cancer", {4182, 49121.62}},
-    {"Small Intestine / Colorectal Cancer", {3676, 39189.98}}
-  ],
-  northeast: [
-    {"Breast Cancer", {7522, 47548.2}},
-    {"Chronic Leukemia", {2976, 59073.06}},
-    {"Lung Cancer", {7856, 65479.17}},
-    {"Lymphoma", {4182, 57627.45}},
-    {"Multiple Myeloma", {5461, 90802.26}},
-    {"Prostate Cancer", {3876, 46550.58}},
-    {"Small Intestine / Colorectal Cancer", {3671, 40184.65}}
-  ],
-  south: [
-    {"Breast Cancer", {16073, 47785.74}},
-    {"Chronic Leukemia", {5568, 58117.49}},
-    {"Lung Cancer", {16759, 64247.92}},
-    {"Lymphoma", {8272, 55507.36}},
-    {"Multiple Myeloma", {10572, 86775.9}},
-    {"Prostate Cancer", {6426, 51004.09}},
-    {"Small Intestine / Colorectal Cancer", {8251, 38275.05}}
-  ]
-]
+%{
+  "Midwest, Both" => %{
+    "Breast Cancer" => %{"avg" => 49600.28, "people" => 8654, "total_cost" => 429240820.72},
+    "Chronic Leukemia" => %{"avg" => 60069.16, "people" => 3616, "total_cost" => 217210088.27},
+    "Lung Cancer" => %{"avg" => 65769.33, "people" => 10003, "total_cost" => 657890596.76},
+    "Lymphoma" => %{"avg" => 57904.86, "people" => 4893, "total_cost" => 283328462.75},
+    "Multiple Myeloma" => %{"avg" => 87925.98, "people" => 6141, "total_cost" => 539953469.62},
+    "Prostate Cancer" => %{"avg" => 49008.8, "people" => 4242, "total_cost" => 207895325.72},
+    "Small Intestine / Colorectal Cancer" => %{
+      "avg" => 40679.47,
+      "people" => 4741,
+      "total_cost" => 192861359.85
+    }
+  },
+  "Midwest, Rural" => %{
+    "Breast Cancer" => %{"avg" => 49757.97, "people" => 1469, "total_cost" => 73094463.51},
+    "Chronic Leukemia" => %{"avg" => 59354.63, "people" => 692, "total_cost" => 41073404.02},
+    "Lung Cancer" => %{"avg" => 65147.8, "people" => 1892, "total_cost" => 123259645.14},
+    "Lymphoma" => %{"avg" => 54058.24, "people" => 829, "total_cost" => 44814280.34},
+    "Multiple Myeloma" => %{"avg" => 88614.76, "people" => 980, "total_cost" => 86842465.33},
+    "Prostate Cancer" => %{"avg" => 52774.43, "people" => 703, "total_cost" => 37100422.87},
+    "Small Intestine / Colorectal Cancer" => %{
+      "avg" => 40586.27,
+      "people" => 1056,
+      "total_cost" => 42859098.04
+    }
+  },
+  "Midwest, Urban" => %{
+    "Breast Cancer" => %{"avg" => 49568.04, "people" => 7185, "total_cost" => 356146357.21},
+    "Chronic Leukemia" => %{"avg" => 60238.26, "people" => 2924, "total_cost" => 176136684.25},
+    "Lung Cancer" => %{"avg" => 65914.31, "people" => 8111, "total_cost" => 534630951.62},
+    "Lymphoma" => %{"avg" => 58689.51, "people" => 4064, "total_cost" => 238514182.41},
+    "Multiple Myeloma" => %{"avg" => 87795.2, "people" => 5161, "total_cost" => 453111004.29},
+    "Prostate Cancer" => %{"avg" => 48260.78, "people" => 3539, "total_cost" => 170794902.85},
+    "Small Intestine / Colorectal Cancer" => %{
+      "avg" => 40706.18,
+      "people" => 3685,
+      "total_cost" => 150002261.81
+    }
+  },
+  "National, Both" => %{
+    "Breast Cancer" => %{"avg" => 48416.43, "people" => 40321, "total_cost" => 1952198785.31},
+    "Chronic Leukemia" => %{"avg" => 59440.23, "people" => 14932, "total_cost" => 887561462.25},
+    "Lung Cancer" => %{"avg" => 66010.11, "people" => 41388, "total_cost" => 2732026543.35},
+    "Lymphoma" => %{"avg" => 57264.45, "people" => 21583, "total_cost" => 1235938549.21},
+    "Multiple Myeloma" => %{"avg" => 88963.93, "people" => 27422, "total_cost" => 2439568999.95},
+    "Prostate Cancer" => %{"avg" => 49658.84, "people" => 18755, "total_cost" => 931351560.1},
+    "Small Intestine / Colorectal Cancer" => %{
+      "avg" => 39625.21,
+      "people" => 20371,
+      "total_cost" => 807205204.85
+    }
+  },
+  "National, Rural" => %{
+    "Breast Cancer" => %{"avg" => 48583.37, "people" => 4465, "total_cost" => 216924737.03},
+    "Chronic Leukemia" => %{"avg" => 58647.5, "people" => 1910, "total_cost" => 112016726.5},
+    "Lung Cancer" => %{"avg" => 63054.5, "people" => 5515, "total_cost" => 347745550.0},
+    "Lymphoma" => %{"avg" => 53273.77, "people" => 2458, "total_cost" => 130946920.31},
+    "Multiple Myeloma" => %{"avg" => 87567.9, "people" => 2975, "total_cost" => 260514504.23},
+    "Prostate Cancer" => %{"avg" => 51262.14, "people" => 2169, "total_cost" => 111187582.85},
+    "Small Intestine / Colorectal Cancer" => %{
+      "avg" => 38202.07,
+      "people" => 2951,
+      "total_cost" => 112734311.91
+    }
+  },
+  "National, Urban" => %{
+    "Breast Cancer" => %{"avg" => 48395.64, "people" => 35856, "total_cost" => 1735274048.28},
+    "Chronic Leukemia" => %{"avg" => 59556.5, "people" => 13022, "total_cost" => 775544735.75},
+    "Lung Cancer" => %{"avg" => 66464.5, "people" => 35873, "total_cost" => 2384280993.35},
+    "Lymphoma" => %{"avg" => 57777.34, "people" => 19125, "total_cost" => 1104991628.9},
+    "Multiple Myeloma" => %{"avg" => 89133.82, "people" => 24447, "total_cost" => 2179054495.72},
+    "Prostate Cancer" => %{"avg" => 49449.17, "people" => 16586, "total_cost" => 820163977.25},
+    "Small Intestine / Colorectal Cancer" => %{
+      "avg" => 39866.3,
+      "people" => 17420,
+      "total_cost" => 694470892.94
+    }
+  },
+  "Northeast, Both" => %{
+    "Breast Cancer" => %{"avg" => 47999.09, "people" => 7523, "total_cost" => 361097190.49},
+    "Chronic Leukemia" => %{"avg" => 59578.98, "people" => 2977, "total_cost" => 177366631.75},
+    "Lung Cancer" => %{"avg" => 66217.25, "people" => 7857, "total_cost" => 520268908.07},
+    "Lymphoma" => %{"avg" => 58225.05, "people" => 4183, "total_cost" => 243555377.35},
+    "Multiple Myeloma" => %{"avg" => 91791.33, "people" => 5462, "total_cost" => 501364225.74},
+    "Prostate Cancer" => %{"avg" => 47167.83, "people" => 3877, "total_cost" => 182869665.72},
+    "Small Intestine / Colorectal Cancer" => %{
+      "avg" => 40613.69,
+      "people" => 3672,
+      "total_cost" => 149133478.5
+    }
+  },
+  "Northeast, Rural" => %{
+    "Breast Cancer" => %{"avg" => 48377.02, "people" => 569, "total_cost" => 27526527.08},
+    "Chronic Leukemia" => %{"avg" => 59474.69, "people" => 230, "total_cost" => 13679178.95},
+    "Lung Cancer" => %{"avg" => 63072.94, "people" => 687, "total_cost" => 43331107.95},
+    "Lymphoma" => %{"avg" => 53031.69, "people" => 369, "total_cost" => 19568694.97},
+    "Multiple Myeloma" => %{"avg" => 89600.56, "people" => 406, "total_cost" => 36377826.93},
+    "Prostate Cancer" => %{"avg" => 48708.51, "people" => 323, "total_cost" => 15732847.68},
+    "Small Intestine / Colorectal Cancer" => %{
+      "avg" => 37713.47,
+      "people" => 337,
+      "total_cost" => 12709439.16
+    }
+  },
+  "Northeast, Urban" => %{
+    "Breast Cancer" => %{"avg" => 47968.17, "people" => 6954, "total_cost" => 333570663.41},
+    "Chronic Leukemia" => %{"avg" => 59587.71, "people" => 2747, "total_cost" => 163687452.8},
+    "Lung Cancer" => %{"avg" => 66518.52, "people" => 7170, "total_cost" => 476937800.12},
+    "Lymphoma" => %{"avg" => 58727.5, "people" => 3814, "total_cost" => 223986682.38},
+    "Multiple Myeloma" => %{"avg" => 91967.25, "people" => 5056, "total_cost" => 464986398.81},
+    "Prostate Cancer" => %{"avg" => 47027.8, "people" => 3554, "total_cost" => 167136818.04},
+    "Small Intestine / Colorectal Cancer" => %{
+      "avg" => 40906.76,
+      "people" => 3335,
+      "total_cost" => 136424039.34
+    }
+  },
+  "South, Both" => %{
+    "Breast Cancer" => %{"avg" => 48297.9, "people" => 16074, "total_cost" => 776340424.48},
+    "Chronic Leukemia" => %{"avg" => 58721.47, "people" => 5569, "total_cost" => 327019848.7},
+    "Lung Cancer" => %{"avg" => 64943.5, "people" => 16760, "total_cost" => 1088453112.03},
+    "Lymphoma" => %{"avg" => 56110.76, "people" => 8273, "total_cost" => 464204347.23},
+    "Multiple Myeloma" => %{"avg" => 87713.3, "people" => 10573, "total_cost" => 927392672.47},
+    "Prostate Cancer" => %{"avg" => 51571.1, "people" => 6427, "total_cost" => 331447469.61},
+    "Small Intestine / Colorectal Cancer" => %{
+      "avg" => 38646.46,
+      "people" => 8252,
+      "total_cost" => 318910621.08
+    }
+  },
+  "South, Rural" => %{
+    "Breast Cancer" => %{"avg" => 48273.81, "people" => 1795, "total_cost" => 86651480.66},
+    "Chronic Leukemia" => %{"avg" => 58550.9, "people" => 751, "total_cost" => 43971723.93},
+    "Lung Cancer" => %{"avg" => 61181.94, "people" => 2344, "total_cost" => 143410472.44},
+    "Lymphoma" => %{"avg" => 53473.71, "people" => 921, "total_cost" => 49249283.43},
+    "Multiple Myeloma" => %{"avg" => 85612.44, "people" => 1171, "total_cost" => 100252166.29},
+    "Prostate Cancer" => %{"avg" => 52629.11, "people" => 763, "total_cost" => 40156009.27},
+    "Small Intestine / Colorectal Cancer" => %{
+      "avg" => 36898.1,
+      "people" => 1221,
+      "total_cost" => 45052584.72
+    }
+  },
+  "South, Urban" => %{
+    "Breast Cancer" => %{"avg" => 48300.93, "people" => 14279, "total_cost" => 689688943.82},
+    "Chronic Leukemia" => %{"avg" => 58748.05, "people" => 4818, "total_cost" => 283048124.77},
+    "Lung Cancer" => %{"avg" => 65555.12, "people" => 14416, "total_cost" => 945042639.59},
+    "Lymphoma" => %{"avg" => 56441.11, "people" => 7352, "total_cost" => 414955063.8},
+    "Multiple Myeloma" => %{"avg" => 87974.95, "people" => 9402, "total_cost" => 827140506.18},
+    "Prostate Cancer" => %{"avg" => 51428.58, "people" => 5664, "total_cost" => 291291460.34},
+    "Small Intestine / Colorectal Cancer" => %{
+      "avg" => 38950.08,
+      "people" => 7031,
+      "total_cost" => 273858036.36
+    }
+  },
+  "West, Both" => %{
+    "Breast Cancer" => %{"avg" => 47859.63, "people" => 8011, "total_cost" => 383403500.43},
+    "Chronic Leukemia" => %{"avg" => 59926.69, "people" => 2756, "total_cost" => 165157944.61},
+    "Lung Cancer" => %{"avg" => 68774.89, "people" => 6737, "total_cost" => 463336428.22},
+    "Lymphoma" => %{"avg" => 57885.75, "people" => 4217, "total_cost" => 244104215.83},
+    "Multiple Myeloma" => %{"avg" => 89908.18, "people" => 5203, "total_cost" => 467792282.04},
+    "Prostate Cancer" => %{"avg" => 49766.57, "people" => 4183, "total_cost" => 208173564.05},
+    "Small Intestine / Colorectal Cancer" => %{
+      "avg" => 39579.53,
+      "people" => 3677,
+      "total_cost" => 145533942.12
+    }
+  },
+  "West, Rural" => %{
+    "Breast Cancer" => %{"avg" => 46918.14, "people" => 632, "total_cost" => 29652265.78},
+    "Chronic Leukemia" => %{"avg" => 56086.16, "people" => 237, "total_cost" => 13292419.6},
+    "Lung Cancer" => %{"avg" => 63757.3, "people" => 592, "total_cost" => 37744324.47},
+    "Lymphoma" => %{"avg" => 51075.7, "people" => 339, "total_cost" => 17314661.57},
+    "Multiple Myeloma" => %{"avg" => 88617.33, "people" => 418, "total_cost" => 37042045.68},
+    "Prostate Cancer" => %{"avg" => 47890.27, "people" => 380, "total_cost" => 18198303.03},
+    "Small Intestine / Colorectal Cancer" => %{
+      "avg" => 35944.18,
+      "people" => 337,
+      "total_cost" => 12113189.99
+    }
+  },
+  "West, Urban" => %{
+    "Breast Cancer" => %{"avg" => 47940.27, "people" => 7379, "total_cost" => 353751234.65},
+    "Chronic Leukemia" => %{"avg" => 60288.02, "people" => 2519, "total_cost" => 151865525.01},
+    "Lung Cancer" => %{"avg" => 69258.28, "people" => 6145, "total_cost" => 425592103.75},
+    "Lymphoma" => %{"avg" => 58481.06, "people" => 3878, "total_cost" => 226789554.26},
+    "Multiple Myeloma" => %{"avg" => 90020.95, "people" => 4785, "total_cost" => 430750236.36},
+    "Prostate Cancer" => %{"avg" => 49954.05, "people" => 3803, "total_cost" => 189975261.02},
+    "Small Intestine / Colorectal Cancer" => %{
+      "avg" => 39946.33,
+      "people" => 3340,
+      "total_cost" => 133420752.13
+    }
+  }
+}
 ```
+
+Only took 1135 seconds. 😅
