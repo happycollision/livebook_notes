@@ -51,77 +51,48 @@ data_stream |> Enum.count()
 Getting some filtering functions ready to go
 
 ```elixir
-is_midwest = fn
-  %{"pgp_id_region" => "Midwest Region"} -> true
-  _ -> false
+defmodule EOM_Filters do
+  def is_midwest(%{"pgp_id_region" => "Midwest Region"}), do: true
+  def is_midwest(_), do: false
+
+  def is_northeast(%{"pgp_id_region" => "Northeast Region"}), do: true
+  def is_northeast(_), do: false
+
+  def is_south(%{"pgp_id_region" => "South Region"}), do: true
+  def is_south(_), do: false
+
+  def is_west(%{"pgp_id_region" => "West Region"}), do: true
+  def is_west(_), do: false
+
+  def is_rural(%{"FORHP_RURAL_IND" => "1"}), do: true
+  def is_rural(_), do: false
+
+  def is_not_rural(%{"FORHP_RURAL_IND" => "0"}), do: true
+  def is_not_rural(_), do: false
+
+  def predicate_groupings do
+    [
+      {"National, Both", [fn _ -> true end]},
+      {"National, Rural", [&is_rural/1]},
+      {"National, Urban", [&is_not_rural/1]},
+      {"Midwest, Both", [&is_midwest/1]},
+      {"Midwest, Rural", [&is_midwest/1, &is_rural/1]},
+      {"Midwest, Urban", [&is_midwest/1, &is_not_rural/1]},
+      {"South, Both", [&is_south/1]},
+      {"South, Rural", [&is_south/1, &is_rural/1]},
+      {"South, Urban", [&is_south/1, &is_not_rural/1]},
+      {"Northeast, Both", [&is_northeast/1]},
+      {"Northeast, Rural", [&is_northeast/1, &is_rural/1]},
+      {"Northeast, Urban", [&is_northeast/1, &is_not_rural/1]},
+      {"West, Both", [&is_west/1]},
+      {"West, Rural", [&is_west/1, &is_rural/1]},
+      {"West, Urban", [&is_west/1, &is_not_rural/1]}
+    ]
+    |> Enum.map(fn {name, predicates} ->
+      {name, &Enum.all?(predicates, fn pred -> pred.(&1) end)}
+    end)
+  end
 end
-
-is_northeast = fn
-  %{"pgp_id_region" => "Northeast Region"} -> true
-  _ -> false
-end
-
-is_south = fn
-  %{"pgp_id_region" => "South Region"} -> true
-  _ -> false
-end
-
-is_west = fn
-  %{"pgp_id_region" => "West Region"} -> true
-  _ -> false
-end
-
-is_rural = fn
-  %{"FORHP_RURAL_IND" => "1"} -> true
-  _ -> false
-end
-
-is_not_rural = fn
-  %{"FORHP_RURAL_IND" => "0"} -> true
-  _ -> false
-end
-
-national = {"National, Both", [fn _ -> true end]}
-national_rural = {"National, Rural", [is_rural]}
-national_urban = {"National, Urban", [is_not_rural]}
-
-midwest = {"Midwest, Both", [is_midwest]}
-midwest_rural = {"Midwest, Rural", [is_midwest, is_rural]}
-midwest_urban = {"Midwest, Urban", [is_midwest, is_not_rural]}
-
-south = {"South, Both", [is_south]}
-south_rural = {"South, Rural", [is_south, is_rural]}
-south_urban = {"South, Urban", [is_south, is_not_rural]}
-
-northeast = {"Northeast, Both", [is_northeast]}
-northeast_rural = {"Northeast, Rural", [is_northeast, is_rural]}
-northeast_urban = {"Northeast, Urban", [is_northeast, is_not_rural]}
-
-west = {"West, Both", [is_west]}
-west_rural = {"West, Rural", [is_west, is_rural]}
-west_urban = {"West, Urban", [is_west, is_not_rural]}
-
-predicate_groupings =
-  [
-    national,
-    national_rural,
-    national_urban,
-    midwest,
-    midwest_rural,
-    midwest_urban,
-    south,
-    south_rural,
-    south_urban,
-    northeast,
-    northeast_rural,
-    northeast_urban,
-    west,
-    west_rural,
-    west_urban
-  ]
-  |> Enum.map(fn {name, predicates} ->
-    {name, &Enum.all?(predicates, fn pred -> pred.(&1) end)}
-  end)
 
 defmodule MyMap do
   def update(map, key, default, fun) when is_map(map) and is_function(fun, 1) do
@@ -152,7 +123,7 @@ data_stream
     |> then(&(100 * &1))
     |> Kernel.round()
 
-  predicate_groupings
+  EOM_Filters.predicate_groupings()
   |> Enum.reduce(tent, fn {grp_name, predicate}, tent ->
     if predicate.(row) do
       MyMap.update(tent, grp_name, %{}, fn section ->
@@ -387,4 +358,5 @@ end)
 ```
 
 ~Only took 1135 seconds. 😅~  
-Down to... 22.4 seconds. A pretty nice improvement.
+~Down to... 22.4 seconds. A pretty nice improvement.~  
+Now 11.1 seconds. Half the time for just defining a module (for compilation benefits)
