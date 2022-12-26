@@ -112,47 +112,55 @@ end
 Gets all the counts for each cancer type and then divides the Raw Total Standardized cost by those counts.
 
 ```elixir
-data_stream
-|> Enum.reduce(%{}, fn row, tent ->
-  pennies =
-    if(String.contains?(row["raw_total_std"], "."),
-      do: row["raw_total_std"],
-      else: row["raw_total_std"] <> ".00"
-    )
-    |> String.to_float()
-    |> then(&(100 * &1))
-    |> Kernel.round()
+defmodule EOM_Data do
+  def calc(data_stream) do
+    predicate_groupings = EOM_Filters.predicate_groupings()
 
-  EOM_Filters.predicate_groupings()
-  |> Enum.reduce(tent, fn {grp_name, predicate}, tent ->
-    if predicate.(row) do
-      MyMap.update(tent, grp_name, %{}, fn section ->
-        MyMap.update(section, row["cancer_type"], {0, 0}, fn
-          {count, running_total} ->
-            {count + 1, running_total + pennies}
-        end)
+    data_stream
+    |> Enum.reduce(%{}, fn row, tent ->
+      pennies =
+        if(String.contains?(row["raw_total_std"], "."),
+          do: row["raw_total_std"],
+          else: row["raw_total_std"] <> ".00"
+        )
+        |> String.to_float()
+        |> then(&(100 * &1))
+        |> Kernel.round()
+
+      predicate_groupings
+      |> Enum.reduce(tent, fn {grp_name, predicate}, tent ->
+        if predicate.(row) do
+          MyMap.update(tent, grp_name, %{}, fn section ->
+            MyMap.update(section, row["cancer_type"], {0, 0}, fn
+              {count, running_total} ->
+                {count + 1, running_total + pennies}
+            end)
+          end)
+        else
+          tent
+        end
       end)
-    else
-      tent
-    end
-  end)
-end)
-|> Map.to_list()
-|> Enum.map(fn {name, details} ->
-  {name,
-   details
-   |> Map.to_list()
-   |> Enum.map(fn {cancer, {count, total_cost}} ->
-     {cancer,
-      %{
-        "people" => count,
-        "total_cost" => (total_cost / 100) |> Float.round(2),
-        "avg" => (total_cost / count / 100) |> Float.round(2)
-      }}
-   end)
-   |> Enum.into(%{})}
-end)
-|> Enum.into(%{})
+    end)
+    |> Map.to_list()
+    |> Enum.map(fn {name, details} ->
+      {name,
+       details
+       |> Map.to_list()
+       |> Enum.map(fn {cancer, {count, total_cost}} ->
+         {cancer,
+          %{
+            "people" => count,
+            "total_cost" => (total_cost / 100) |> Float.round(2),
+            "avg" => (total_cost / count / 100) |> Float.round(2)
+          }}
+       end)
+       |> Enum.into(%{})}
+    end)
+    |> Enum.into(%{})
+  end
+end
+
+EOM_Data.calc(data_stream)
 ```
 
 <!-- livebook:{"output":true} -->
@@ -359,4 +367,5 @@ end)
 
 ~Only took 1135 seconds. 😅~  
 ~Down to... 22.4 seconds. A pretty nice improvement.~  
-Now 11.1 seconds. Half the time for just defining a module (for compilation benefits)
+~Now 11.1 seconds. Half the time for just defining a module (for compilation benefits)~  
+Do the same thing again: 3.6 seconds.
