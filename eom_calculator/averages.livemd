@@ -51,29 +51,35 @@ data_stream |> Enum.count()
 Getting some filtering functions ready to go
 
 ```elixir
-row_filter = fn key_filter_predicate, value_predicate ->
-  fn row ->
-    row
-    |> Map.keys()
-    |> Enum.filter(key_filter_predicate)
-    |> Enum.map(&Map.get(row, &1))
-    |> Enum.any?(value_predicate)
-  end
+is_midwest = fn
+  %{"pgp_id_region" => "Midwest Region"} -> true
+  _ -> false
 end
 
-predicate_via_kv = fn k, v ->
-  row_filter.(
-    &String.equivalent?(String.downcase(&1), String.downcase(k)),
-    fn x -> x === v end
-  )
+is_northeast = fn
+  %{"pgp_id_region" => "Northeast Region"} -> true
+  _ -> false
 end
 
-is_midwest = predicate_via_kv.("pgp_id_region", "Midwest Region")
-is_northeast = predicate_via_kv.("pgp_id_region", "Northeast Region")
-is_south = predicate_via_kv.("pgp_id_region", "South Region")
-is_west = predicate_via_kv.("pgp_id_region", "West Region")
-is_rural = predicate_via_kv.("forhp_rural_ind", "1")
-is_not_rural = predicate_via_kv.("forhp_rural_ind", "0")
+is_south = fn
+  %{"pgp_id_region" => "South Region"} -> true
+  _ -> false
+end
+
+is_west = fn
+  %{"pgp_id_region" => "West Region"} -> true
+  _ -> false
+end
+
+is_rural = fn
+  %{"FORHP_RURAL_IND" => "1"} -> true
+  _ -> false
+end
+
+is_not_rural = fn
+  %{"FORHP_RURAL_IND" => "0"} -> true
+  _ -> false
+end
 
 national = {"National, Both", [fn _ -> true end]}
 national_rural = {"National, Rural", [is_rural]}
@@ -380,4 +386,5 @@ end)
 }
 ```
 
-Only took 1135 seconds. 😅
+~Only took 1135 seconds. 😅~  
+Down to... 22.4 seconds. A pretty nice improvement.
