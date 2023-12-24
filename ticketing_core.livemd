@@ -9,10 +9,6 @@ Mix.install([:ash], consolidate_protocols: false)
 
 ## Core definitions in Ash
 
-This is all Copy/paste from the ash tutorial as a starting point. Check the commit history for changes.
-
-1. Copy paste, then rename variables with no functional changes.
-
 ```elixir
 defmodule BoxOffice.Core.Patron do
   use Ash.Resource,
@@ -25,10 +21,10 @@ defmodule BoxOffice.Core.Patron do
     attribute(:name, :string)
   end
 
-  # Added the inverse relationship of belongs_to in the ticket.
-  # This way we can reference :tickets inside the aggregates.
+  # Added the inverse relationship of belongs_to in the reservation.
+  # This way we can reference :reservations inside the aggregates.
   relationships do
-    has_many(:tickets, BoxOffice.Core.Ticket)
+    has_many(:reservations, BoxOffice.Core.Reservation)
   end
 
   code_interface do
@@ -39,13 +35,11 @@ defmodule BoxOffice.Core.Patron do
 
   # <- Add the aggregates here
   aggregates do
-    count :count_of_open_tickets, :tickets do
-      filter(expr(status == :open))
-    end
+    count(:count_of_reservations, :reservations)
   end
 end
 
-defmodule BoxOffice.Core.Ticket do
+defmodule BoxOffice.Core.Reservation do
   use Ash.Resource,
     data_layer: Ash.DataLayer.Ets
 
@@ -53,30 +47,11 @@ defmodule BoxOffice.Core.Ticket do
     defaults([:read, :update])
 
     # On creation set the patron by providing the id
-    create(:open, do: accept([:subject, :description, :patron_id]))
-
-    update :close do
-      accept([])
-      change(set_attribute(:status, :closed))
-    end
-
-    update :assign do
-      accept([])
-      argument(:patron_id, :uuid, allow_nil?: false)
-      change(manage_relationship(:patron_id, :patron, type: :append_and_remove))
-    end
+    create(:make, do: accept([:patron_id]))
   end
 
   attributes do
     uuid_primary_key(:id)
-    attribute(:subject, :string, allow_nil?: false)
-    attribute(:description, :string, allow_nil?: true)
-
-    attribute :status, :atom do
-      constraints(one_of: [:open, :closed])
-      default(:open)
-      allow_nil?(false)
-    end
 
     create_timestamp(:created_at)
     update_timestamp(:updated_at)
@@ -92,10 +67,7 @@ defmodule BoxOffice.Core.Ticket do
   code_interface do
     define_for(BoxOffice.Core)
 
-    define(:assign, args: [:patron_id])
-    # <- added patron_id
-    define(:open, args: [:subject, :description, :patron_id])
-    define(:close, args: [])
+    define(:make, args: [:patron_id])
   end
 end
 
@@ -103,8 +75,35 @@ defmodule BoxOffice.Core do
   use Ash.Api
 
   resources do
-    resource(BoxOffice.Core.Ticket)
+    resource(BoxOffice.Core.Reservation)
     resource(BoxOffice.Core.Patron)
   end
 end
+```
+
+## Seed
+
+```elixir
+patron = BoxOffice.Core.Patron.create!("Sally")
+reservation = BoxOffice.Core.Reservation.make!(patron.id)
+```
+
+## Query
+
+```elixir
+require Ash.Query
+
+[reservation] =
+  BoxOffice.Core.Reservation
+  |> Ash.Query.limit(1)
+  |> BoxOffice.Core.read!()
+  |> BoxOffice.Core.load!([:patron])
+
+reservation.patron
+```
+
+```elixir
+patron = BoxOffice.Core.load!(reservation.patron, [:count_of_reservations])
+
+patron.count_of_reservations
 ```
