@@ -39,6 +39,30 @@ defmodule BoxOffice.Core.Patron do
   end
 end
 
+defmodule BoxOffice.Core.Seat do
+  use Ash.Resource,
+    data_layer: Ash.DataLayer.Ets
+
+  actions(do: defaults([:create, :read, :update, :destroy]))
+
+  attributes do
+    uuid_primary_key(:id)
+    attribute(:name, :string)
+  end
+
+  # Added the inverse relationship of belongs_to in the reservation.
+  # This way we can reference :reservations inside the aggregates.
+  relationships do
+    has_many(:reservations, BoxOffice.Core.Reservation)
+  end
+
+  code_interface do
+    define_for(BoxOffice.Core)
+
+    define(:create, args: [:name])
+  end
+end
+
 defmodule BoxOffice.Core.Reservation do
   use Ash.Resource,
     data_layer: Ash.DataLayer.Ets
@@ -47,7 +71,7 @@ defmodule BoxOffice.Core.Reservation do
     defaults([:read, :update])
 
     # On creation set the patron by providing the id
-    create(:make, do: accept([:patron_id]))
+    create(:make, do: accept([:patron_id, :seat_id]))
   end
 
   attributes do
@@ -62,12 +86,16 @@ defmodule BoxOffice.Core.Reservation do
       # Set to writable so you can directly set the patron_id inside the :open action
       attribute_writable?(true)
     end
+
+    belongs_to(:seat, BoxOffice.Core.Seat) do
+      attribute_writable?(true)
+    end
   end
 
   code_interface do
     define_for(BoxOffice.Core)
 
-    define(:make, args: [:patron_id])
+    define(:make, args: [:patron_id, :seat_id])
   end
 end
 
@@ -77,6 +105,7 @@ defmodule BoxOffice.Core do
   resources do
     resource(BoxOffice.Core.Reservation)
     resource(BoxOffice.Core.Patron)
+    resource(BoxOffice.Core.Seat)
   end
 end
 ```
@@ -85,7 +114,8 @@ end
 
 ```elixir
 patron = BoxOffice.Core.Patron.create!("Sally")
-reservation = BoxOffice.Core.Reservation.make!(patron.id)
+seat = BoxOffice.Core.Seat.create!("A1")
+reservation = BoxOffice.Core.Reservation.make!(patron.id, seat.id)
 ```
 
 ## Query
@@ -95,15 +125,14 @@ require Ash.Query
 
 [reservation] =
   BoxOffice.Core.Reservation
+  |> Ash.Query.sort(created_at: :desc)
   |> Ash.Query.limit(1)
   |> BoxOffice.Core.read!()
-  |> BoxOffice.Core.load!([:patron])
+  |> BoxOffice.Core.load!([:patron, :seat])
 
-reservation.patron
+reservation
 ```
 
 ```elixir
-patron = BoxOffice.Core.load!(reservation.patron, [:count_of_reservations])
-
-patron.count_of_reservations
+BoxOffice.Core.load!(reservation.seat, [:name])
 ```
