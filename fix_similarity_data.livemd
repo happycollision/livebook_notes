@@ -1,0 +1,55 @@
+<!-- livebook:{"app_settings":{"access_type":"public","slug":"slug"}} -->
+
+# Data wrangling with Explorer, the power of Rust, the elegance of R - Launch Week 1 - Day 5
+
+```elixir
+Mix.install([
+  {:explorer, "~> 0.5.6"},
+  {:kino_explorer, "~> 0.1.4"},
+  {:kino, "~> 0.9.4"}
+])
+```
+
+## Section
+
+```elixir
+input = Kino.Input.file("File")
+```
+
+```elixir
+value = Kino.Input.read(input)
+path = Kino.Input.file_path(value.file_ref) > dbg()
+# file = File.read!(path)
+file = File.read!("/Users/dondenton/Downloads/similarity_example_output_5_9_23.csv")
+```
+
+```elixir
+require Explorer.DataFrame, as: DF
+alias Explorer.Series, as: S
+
+data = DF.load_csv!(file)
+```
+
+```elixir
+is_index = S.equal(data[:similarity], 0)
+
+idx =
+  S.select(
+    is_index,
+    data[:hospital_addresskey],
+    S.from_list(["0"])
+  )
+  |> S.transform(fn addy -> if addy == "0", do: nil, else: addy end)
+  |> S.fill_missing(:forward)
+
+fixed =
+  data
+  |> DF.put(
+    :index_hospital_addresskey,
+    idx
+  )
+```
+
+```elixir
+DF.to_csv(fixed, "/Users/dondenton/Downloads/similarity_example_output_5_9_23__fixed.csv")
+```
