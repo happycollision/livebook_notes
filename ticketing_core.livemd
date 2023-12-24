@@ -1,0 +1,110 @@
+# Ticketing core
+
+```elixir
+# Copy pasta from Ash Livebook Tutorial
+Application.put_env(:ash, :validate_api_resource_inclusion?, false)
+Application.put_env(:ash, :validate_api_config_inclusion?, false)
+Mix.install([:ash], consolidate_protocols: false)
+```
+
+## Core definitions in Ash
+
+This is all Copy/paste from the ash tutorial as a starting point. Check the commit history for changes.
+
+1. Copy paste with no functional changes.
+
+```elixir
+defmodule Tutorial.Support.Representative do
+  use Ash.Resource,
+    data_layer: Ash.DataLayer.Ets
+
+  actions(do: defaults([:create, :read, :update, :destroy]))
+
+  attributes do
+    uuid_primary_key(:id)
+    attribute(:name, :string)
+  end
+
+  # Added the inverse relationship of belongs_to in the ticket.
+  # This way we can reference :tickets inside the aggregates.
+  relationships do
+    has_many(:tickets, Tutorial.Support.Ticket)
+  end
+
+  code_interface do
+    define_for(Tutorial.Support)
+
+    define(:create, args: [:name])
+  end
+
+  # <- Add the aggregates 
+  aggregates do
+    count :count_of_open_tickets, :tickets do
+      filter(expr(status == :open))
+    end
+  end
+end
+
+defmodule Tutorial.Support.Ticket do
+  use Ash.Resource,
+    data_layer: Ash.DataLayer.Ets
+
+  actions do
+    defaults([:read, :update])
+
+    # On creation set the representative by providing the id
+    create(:open, do: accept([:subject, :description, :representative_id]))
+
+    update :close do
+      accept([])
+      change(set_attribute(:status, :closed))
+    end
+
+    update :assign do
+      accept([])
+      argument(:representative_id, :uuid, allow_nil?: false)
+      change(manage_relationship(:representative_id, :representative, type: :append_and_remove))
+    end
+  end
+
+  attributes do
+    uuid_primary_key(:id)
+    attribute(:subject, :string, allow_nil?: false)
+    attribute(:description, :string, allow_nil?: true)
+
+    attribute :status, :atom do
+      constraints(one_of: [:open, :closed])
+      default(:open)
+      allow_nil?(false)
+    end
+
+    create_timestamp(:created_at)
+    update_timestamp(:updated_at)
+  end
+
+  relationships do
+    belongs_to(:representative, Tutorial.Support.Representative) do
+      # Set to writable so you can directly set the representative_id inside the :open action
+      attribute_writable?(true)
+    end
+  end
+
+  code_interface do
+    define_for(Tutorial.Support)
+
+    define(:assign, args: [:representative_id])
+    # <- added representative_id
+    define(:open, args: [:subject, :description, :representative_id])
+    define(:close, args: [])
+  end
+end
+
+defmodule Tutorial.Support do
+  use Ash.Api
+
+  resources do
+    resource(Tutorial.Support.Ticket)
+    resource(Tutorial.Support.Representative)
+  end
+end
+```
