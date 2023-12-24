@@ -11,10 +11,10 @@ Mix.install([:ash], consolidate_protocols: false)
 
 This is all Copy/paste from the ash tutorial as a starting point. Check the commit history for changes.
 
-1. Copy paste with no functional changes.
+1. Copy paste, then rename variables with no functional changes.
 
 ```elixir
-defmodule Tutorial.Support.Representative do
+defmodule BoxOffice.Core.Patron do
   use Ash.Resource,
     data_layer: Ash.DataLayer.Ets
 
@@ -28,16 +28,16 @@ defmodule Tutorial.Support.Representative do
   # Added the inverse relationship of belongs_to in the ticket.
   # This way we can reference :tickets inside the aggregates.
   relationships do
-    has_many(:tickets, Tutorial.Support.Ticket)
+    has_many(:tickets, BoxOffice.Core.Ticket)
   end
 
   code_interface do
-    define_for(Tutorial.Support)
+    define_for(BoxOffice.Core)
 
     define(:create, args: [:name])
   end
 
-  # <- Add the aggregates 
+  # <- Add the aggregates here
   aggregates do
     count :count_of_open_tickets, :tickets do
       filter(expr(status == :open))
@@ -45,15 +45,15 @@ defmodule Tutorial.Support.Representative do
   end
 end
 
-defmodule Tutorial.Support.Ticket do
+defmodule BoxOffice.Core.Ticket do
   use Ash.Resource,
     data_layer: Ash.DataLayer.Ets
 
   actions do
     defaults([:read, :update])
 
-    # On creation set the representative by providing the id
-    create(:open, do: accept([:subject, :description, :representative_id]))
+    # On creation set the patron by providing the id
+    create(:open, do: accept([:subject, :description, :patron_id]))
 
     update :close do
       accept([])
@@ -62,8 +62,8 @@ defmodule Tutorial.Support.Ticket do
 
     update :assign do
       accept([])
-      argument(:representative_id, :uuid, allow_nil?: false)
-      change(manage_relationship(:representative_id, :representative, type: :append_and_remove))
+      argument(:patron_id, :uuid, allow_nil?: false)
+      change(manage_relationship(:patron_id, :patron, type: :append_and_remove))
     end
   end
 
@@ -83,28 +83,28 @@ defmodule Tutorial.Support.Ticket do
   end
 
   relationships do
-    belongs_to(:representative, Tutorial.Support.Representative) do
-      # Set to writable so you can directly set the representative_id inside the :open action
+    belongs_to(:patron, BoxOffice.Core.Patron) do
+      # Set to writable so you can directly set the patron_id inside the :open action
       attribute_writable?(true)
     end
   end
 
   code_interface do
-    define_for(Tutorial.Support)
+    define_for(BoxOffice.Core)
 
-    define(:assign, args: [:representative_id])
-    # <- added representative_id
-    define(:open, args: [:subject, :description, :representative_id])
+    define(:assign, args: [:patron_id])
+    # <- added patron_id
+    define(:open, args: [:subject, :description, :patron_id])
     define(:close, args: [])
   end
 end
 
-defmodule Tutorial.Support do
+defmodule BoxOffice.Core do
   use Ash.Api
 
   resources do
-    resource(Tutorial.Support.Ticket)
-    resource(Tutorial.Support.Representative)
+    resource(BoxOffice.Core.Ticket)
+    resource(BoxOffice.Core.Patron)
   end
 end
 ```
