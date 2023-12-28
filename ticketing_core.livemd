@@ -54,12 +54,69 @@ defmodule BoxOffice.Core.Seat do
   # This way we can reference :reservations inside the aggregates.
   relationships do
     has_many(:reservations, BoxOffice.Core.Reservation)
+
+    many_to_many :seating_charts, BoxOffice.Core.SeatingChart do
+      through(BoxOffice.Core.SeatSeatingChart)
+      source_attribute_on_join_resource(:seat_id)
+      destination_attribute_on_join_resource(:seating_chart_id)
+    end
   end
 
   code_interface do
     define_for(BoxOffice.Core)
 
     define(:create, args: [:name])
+  end
+end
+
+defmodule BoxOffice.Core.SeatSeatingChart do
+  use Ash.Resource,
+    data_layer: Ash.DataLayer.Ets
+
+  relationships do
+    belongs_to(:seat, BoxOffice.Core.Seat, primary_key?: true, allow_nil?: false)
+    belongs_to(:seating_chart, BoxOffice.Core.SeatingChart, primary_key?: true, allow_nil?: false)
+  end
+
+  actions do
+    defaults([:create, :read, :update, :destroy])
+  end
+end
+
+defmodule BoxOffice.Core.SeatingChart do
+  use Ash.Resource,
+    data_layer: Ash.DataLayer.Ets
+
+  actions do
+    defaults([:create, :read, :update, :destroy])
+
+    update :add_seat do
+      accept([])
+      argument(:seat_id, :uuid, allow_nil?: false)
+      change(manage_relationship(:seat_id, :seats, type: :append))
+    end
+  end
+
+  attributes do
+    uuid_primary_key(:id)
+    attribute(:name, :string)
+  end
+
+  relationships do
+    many_to_many :seats, BoxOffice.Core.Seat do
+      through(BoxOffice.Core.SeatSeatingChart)
+      source_attribute_on_join_resource(:seating_chart_id)
+      destination_attribute_on_join_resource(:seat_id)
+    end
+
+    has_many(:performances, BoxOffice.Core.Performance)
+  end
+
+  code_interface do
+    define_for(BoxOffice.Core)
+
+    define(:create, args: [:name])
+    define(:add_seat, args: [:seat_id])
   end
 end
 
@@ -79,10 +136,16 @@ defmodule BoxOffice.Core.Performance do
 
   actions(do: defaults([:create, :read, :update, :destroy]))
 
+  relationships do
+    belongs_to(:seating_chart, BoxOffice.Core.SeatingChart) do
+      attribute_writable?(true)
+    end
+  end
+
   code_interface do
     define_for(BoxOffice.Core)
 
-    define(:create, args: [:show_id, :datetime])
+    define(:create, args: [:show_id, :datetime, :seating_chart_id])
   end
 end
 
@@ -134,6 +197,8 @@ defmodule BoxOffice.Core do
     resource(BoxOffice.Core.Patron)
     resource(BoxOffice.Core.Performance)
     resource(BoxOffice.Core.Seat)
+    resource(BoxOffice.Core.SeatingChart)
+    resource(BoxOffice.Core.SeatSeatingChart)
   end
 end
 ```
@@ -143,7 +208,12 @@ end
 ```elixir
 patron = BoxOffice.Core.Patron.create!("Sally")
 seat = BoxOffice.Core.Seat.create!("A1")
-performance = BoxOffice.Core.Performance.create!("Someshow", ~N[2024-01-01 20:00:00])
+seating_chart = BoxOffice.Core.SeatingChart.create!("main chart")
+BoxOffice.Core.SeatingChart.add_seat!(seating_chart, seat.id)
+
+performance =
+  BoxOffice.Core.Performance.create!("Someshow", ~N[2024-01-01 20:00:00], seating_chart.id)
+
 reservation = BoxOffice.Core.Reservation.make!(patron.id, performance.id, seat.id)
 ```
 
@@ -157,11 +227,15 @@ require Ash.Query
   |> Ash.Query.sort(created_at: :desc)
   |> Ash.Query.limit(1)
   |> BoxOffice.Core.read!()
-  |> BoxOffice.Core.load!([:patron, :seat, :performance])
+  |> BoxOffice.Core.load!([:patron, :seat, performance: [:seating_chart]])
 
 reservation
 ```
 
 ```elixir
 BoxOffice.Core.load!(reservation.seat, [:name])
+```
+
+```elixir
+BoxOffice.Core.load!(reservation.performance.seating_chart, [:seats])
 ```
