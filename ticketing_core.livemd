@@ -63,6 +63,29 @@ defmodule BoxOffice.Core.Seat do
   end
 end
 
+defmodule BoxOffice.Core.Performance do
+  use Ash.Resource,
+    data_layer: Ash.DataLayer.Ets
+
+  attributes do
+    uuid_primary_key(:id)
+    # later, this will be a ref
+    attribute(:show_id, :string)
+    attribute(:datetime, :naive_datetime)
+
+    create_timestamp(:created_at)
+    update_timestamp(:updated_at)
+  end
+
+  actions(do: defaults([:create, :read, :update, :destroy]))
+
+  code_interface do
+    define_for(BoxOffice.Core)
+
+    define(:create, args: [:show_id, :datetime])
+  end
+end
+
 defmodule BoxOffice.Core.Reservation do
   use Ash.Resource,
     data_layer: Ash.DataLayer.Ets
@@ -71,7 +94,7 @@ defmodule BoxOffice.Core.Reservation do
     defaults([:read, :update])
 
     # On creation set the patron by providing the id
-    create(:make, do: accept([:patron_id, :seat_id]))
+    create(:make, do: accept([:patron_id, :performance_id, :seat_id]))
   end
 
   attributes do
@@ -90,12 +113,16 @@ defmodule BoxOffice.Core.Reservation do
     belongs_to(:seat, BoxOffice.Core.Seat) do
       attribute_writable?(true)
     end
+
+    belongs_to(:performance, BoxOffice.Core.Performance) do
+      attribute_writable?(true)
+    end
   end
 
   code_interface do
     define_for(BoxOffice.Core)
 
-    define(:make, args: [:patron_id, :seat_id])
+    define(:make, args: [:patron_id, :performance_id, :seat_id])
   end
 end
 
@@ -105,6 +132,7 @@ defmodule BoxOffice.Core do
   resources do
     resource(BoxOffice.Core.Reservation)
     resource(BoxOffice.Core.Patron)
+    resource(BoxOffice.Core.Performance)
     resource(BoxOffice.Core.Seat)
   end
 end
@@ -115,7 +143,8 @@ end
 ```elixir
 patron = BoxOffice.Core.Patron.create!("Sally")
 seat = BoxOffice.Core.Seat.create!("A1")
-reservation = BoxOffice.Core.Reservation.make!(patron.id, seat.id)
+performance = BoxOffice.Core.Performance.create!("Someshow", ~N[2024-01-01 20:00:00])
+reservation = BoxOffice.Core.Reservation.make!(patron.id, performance.id, seat.id)
 ```
 
 ## Query
@@ -128,7 +157,7 @@ require Ash.Query
   |> Ash.Query.sort(created_at: :desc)
   |> Ash.Query.limit(1)
   |> BoxOffice.Core.read!()
-  |> BoxOffice.Core.load!([:patron, :seat])
+  |> BoxOffice.Core.load!([:patron, :seat, :performance])
 
 reservation
 ```
