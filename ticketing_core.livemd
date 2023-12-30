@@ -4,7 +4,7 @@
 # Copy pasta from Ash Livebook Tutorial
 Application.put_env(:ash, :validate_api_resource_inclusion?, false)
 Application.put_env(:ash, :validate_api_config_inclusion?, false)
-Mix.install([:ash], consolidate_protocols: false)
+Mix.install([:ash, :kino], consolidate_protocols: false)
 ```
 
 ## Core definitions in Ash
@@ -232,10 +232,140 @@ require Ash.Query
 reservation
 ```
 
-```elixir
-BoxOffice.Core.load!(reservation.seat, [:name])
-```
+## Storage
 
 ```elixir
-BoxOffice.Core.load!(reservation.performance.seating_chart, [:seats])
+defmodule Ash.DataLayer.Ets.Kino do
+  @moduledoc """
+  A kino for interactively viewing Ash ETS data.
+
+  ## Examples
+
+      Ash.DataLayer.Ets.Kino.new(SomeResource)
+  """
+
+  @behaviour Kino.Table
+
+  @type t :: Kino.Table.t()
+
+  @doc """
+  Creates a new kino displaying the given Ash ETS table.
+  """
+  @spec new(:ets.tid()) :: t()
+  def new(tid) do
+    case :ets.info(tid, :protection) do
+      :private ->
+        raise ArgumentError,
+              "the given table must be either public or protected, but a private one was given"
+
+      :undefined ->
+        raise ArgumentError,
+              "the given table identifier #{inspect(tid)} does not refer to an existing ETS table"
+
+      _ ->
+        :ok
+    end
+
+    Kino.Table.new(__MODULE__, {tid})
+  end
+
+  @impl true
+  def init({tid}) do
+    table_name = :ets.info(tid, :name)
+    name = "Ash ETS #{inspect(table_name)}"
+    info = %{name: name, features: [:refetch, :pagination]}
+    {:ok, info, %{tid: tid}}
+  end
+
+  @impl true
+  def get_data(rows_spec, state) do
+    records =
+      get_records(state.tid, rows_spec)
+      |> Enum.map(fn {ids, data} -> Map.merge(data, ids) end)
+
+    data =
+      Enum.map(records, &Map.values/1)
+      |> Enum.map(fn values ->
+        Enum.map(values, fn
+          value ->
+            cond do
+              is_binary(value) && !String.valid?(value) ->
+                inspect(value)
+
+              match?(%NaiveDateTime{}, value) ->
+                to_string(value)
+
+              match?(%DateTime{}, value) ->
+                to_string(value)
+
+              match?(%Date{}, value) ->
+                to_string(value)
+
+              match?(%Time{}, value) ->
+                to_string(value)
+
+              true ->
+                value
+            end
+        end)
+      end)
+
+    columns =
+      Enum.at(records, 0)
+      |> Map.keys()
+      |> Enum.map(fn label -> %{key: label, label: label} end)
+
+    total_rows = :ets.info(state.tid, :size)
+    {:ok, %{columns: columns, data: {:rows, data}, total_rows: total_rows}, state}
+  end
+
+  defp get_records(tid, rows_spec) do
+    query = :ets.table(tid)
+    cursor = :qlc.cursor(query)
+
+    if rows_spec.offset > 0 do
+      :qlc.next_answers(cursor, rows_spec.offset)
+    end
+
+    records = :qlc.next_answers(cursor, rows_spec.limit)
+    :qlc.delete_cursor(cursor)
+    records
+  end
+end
+```
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+Ash.DataLayer.Ets.Kino.new(BoxOffice.Core.SeatingChart)
+```
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+Ash.DataLayer.Ets.Kino.new(BoxOffice.Core.Seat)
+```
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+Ash.DataLayer.Ets.Kino.new(BoxOffice.Core.SeatSeatingChart)
+```
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+Ash.DataLayer.Ets.Kino.new(BoxOffice.Core.Patron)
+```
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+Ash.DataLayer.Ets.Kino.new(BoxOffice.Core.Performance)
+```
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+Ash.DataLayer.Ets.Kino.new(BoxOffice.Core.Reservation)
 ```
