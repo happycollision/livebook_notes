@@ -116,6 +116,10 @@ defmodule BoxOffice.Core.SeatingChart do
     define(:create, args: [:name])
     define(:add_seat, args: [:seat_id])
   end
+
+  aggregates do
+    count(:count_of_seats, :seats)
+  end
 end
 
 defmodule BoxOffice.Core.Production do
@@ -165,12 +169,26 @@ defmodule BoxOffice.Core.Performance do
     belongs_to(:seating_chart, BoxOffice.Core.SeatingChart) do
       attribute_writable?(true)
     end
+
+    has_many(:reservations, BoxOffice.Core.Reservation)
   end
 
   code_interface do
     define_for(BoxOffice.Core)
 
     define(:create, args: [:production_id, :datetime, :seating_chart_id])
+  end
+
+  aggregates do
+    count(:count_of_reserved_seats, :reservations)
+  end
+
+  calculations do
+    calculate(
+      :count_of_unreserved_seats,
+      :integer,
+      expr(seating_chart.count_of_seats - count_of_reserved_seats)
+    )
   end
 end
 
@@ -233,16 +251,28 @@ end
 
 ```elixir
 patron = BoxOffice.Core.Patron.create!("Sally")
-seat = BoxOffice.Core.Seat.create!("A1")
 seating_chart = BoxOffice.Core.SeatingChart.create!("main chart")
-BoxOffice.Core.SeatingChart.add_seat!(seating_chart, seat.id)
+
+names =
+  for alpha <- ?A..?G, numb <- 1..10 do
+    to_string([alpha]) <> to_string(numb)
+  end
+  |> Enum.map(fn name -> %{name: name} end)
+
+seats =
+  BoxOffice.Core.bulk_create!(names, BoxOffice.Core.Seat, :create, return_records?: true) |> dbg
+
+seats.records
+|> Enum.map(fn seat ->
+  BoxOffice.Core.SeatingChart.add_seat!(seating_chart, seat.id)
+end)
 
 production = BoxOffice.Core.Production.create!("A Funny Thing Happened on the Way to the Forum")
 
 performance =
   BoxOffice.Core.Performance.create!(production.id, ~N[2024-01-01 20:00:00], seating_chart.id)
 
-reservation = BoxOffice.Core.Reservation.make!(patron.id, performance.id, seat.id)
+reservation = BoxOffice.Core.Reservation.make!(patron.id, performance.id, hd(seats.records).id)
 ```
 
 ## Query
@@ -258,6 +288,13 @@ require Ash.Query
   |> BoxOffice.Core.load!([:patron, :seat, performance: [:seating_chart]])
 
 reservation
+```
+
+```elixir
+BoxOffice.Core.load!(reservation.performance, [
+  :count_of_reserved_seats,
+  :count_of_unreserved_seats
+])
 ```
 
 ## Storage
