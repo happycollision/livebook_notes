@@ -50,8 +50,6 @@ defmodule BoxOffice.Core.Seat do
     attribute(:name, :string)
   end
 
-  # Added the inverse relationship of belongs_to in the reservation.
-  # This way we can reference :reservations inside the aggregates.
   relationships do
     has_many(:reservations, BoxOffice.Core.Reservation)
 
@@ -120,14 +118,37 @@ defmodule BoxOffice.Core.SeatingChart do
   end
 end
 
+defmodule BoxOffice.Core.Production do
+  use Ash.Resource,
+    data_layer: Ash.DataLayer.Ets
+
+  attributes do
+    uuid_primary_key(:id)
+    attribute(:title, :string)
+
+    create_timestamp(:created_at)
+    update_timestamp(:updated_at)
+  end
+
+  actions(do: defaults([:create, :read, :update, :destroy]))
+
+  relationships do
+    has_many(:performances, BoxOffice.Core.Performance)
+  end
+
+  code_interface do
+    define_for(BoxOffice.Core)
+
+    define(:create, args: [:title])
+  end
+end
+
 defmodule BoxOffice.Core.Performance do
   use Ash.Resource,
     data_layer: Ash.DataLayer.Ets
 
   attributes do
     uuid_primary_key(:id)
-    # later, this will be a ref
-    attribute(:show_id, :string)
     attribute(:datetime, :naive_datetime)
 
     create_timestamp(:created_at)
@@ -137,6 +158,10 @@ defmodule BoxOffice.Core.Performance do
   actions(do: defaults([:create, :read, :update, :destroy]))
 
   relationships do
+    belongs_to(:production, BoxOffice.Core.Production) do
+      attribute_writable?(true)
+    end
+
     belongs_to(:seating_chart, BoxOffice.Core.SeatingChart) do
       attribute_writable?(true)
     end
@@ -145,7 +170,7 @@ defmodule BoxOffice.Core.Performance do
   code_interface do
     define_for(BoxOffice.Core)
 
-    define(:create, args: [:show_id, :datetime, :seating_chart_id])
+    define(:create, args: [:production_id, :datetime, :seating_chart_id])
   end
 end
 
@@ -195,6 +220,7 @@ defmodule BoxOffice.Core do
   resources do
     resource(BoxOffice.Core.Reservation)
     resource(BoxOffice.Core.Patron)
+    resource(BoxOffice.Core.Production)
     resource(BoxOffice.Core.Performance)
     resource(BoxOffice.Core.Seat)
     resource(BoxOffice.Core.SeatingChart)
@@ -211,8 +237,10 @@ seat = BoxOffice.Core.Seat.create!("A1")
 seating_chart = BoxOffice.Core.SeatingChart.create!("main chart")
 BoxOffice.Core.SeatingChart.add_seat!(seating_chart, seat.id)
 
+production = BoxOffice.Core.Production.create!("A Funny Thing Happened on the Way to the Forum")
+
 performance =
-  BoxOffice.Core.Performance.create!("Someshow", ~N[2024-01-01 20:00:00], seating_chart.id)
+  BoxOffice.Core.Performance.create!(production.id, ~N[2024-01-01 20:00:00], seating_chart.id)
 
 reservation = BoxOffice.Core.Reservation.make!(patron.id, performance.id, seat.id)
 ```
@@ -233,6 +261,8 @@ reservation
 ```
 
 ## Storage
+
+<!-- livebook:{"reevaluate_automatically":true} -->
 
 ```elixir
 defmodule Ash.DataLayer.Ets.Kino do
@@ -356,6 +386,12 @@ Ash.DataLayer.Ets.Kino.new(BoxOffice.Core.SeatSeatingChart)
 
 ```elixir
 Ash.DataLayer.Ets.Kino.new(BoxOffice.Core.Patron)
+```
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+Ash.DataLayer.Ets.Kino.new(BoxOffice.Core.Production)
 ```
 
 <!-- livebook:{"reevaluate_automatically":true} -->
