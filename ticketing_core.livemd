@@ -250,37 +250,54 @@ defmodule BoxOffice.Core do
     resource(BoxOffice.Core.SeatSeatingChart)
   end
 end
+
+defmodule BoxOffice.Core.Test do
+  def reset() do
+    BoxOffice.Core
+    |> Ash.Api.Info.resources()
+    |> Enum.each(fn resource -> :ets.delete_all_objects(resource) end)
+  end
+end
+```
+
+```elixir
+Ash.Api.Info.Diagram.mermaid_class_diagram(BoxOffice.Core)
+|> Kino.Mermaid.new()
 ```
 
 ## Seed
 
 ```elixir
-patron = BoxOffice.Core.Patron.create!("Sally")
-seating_chart = BoxOffice.Core.SeatingChart.create!("main chart")
+seed = fn ->
+  patron = BoxOffice.Core.Patron.create!("Sally")
+  seating_chart = BoxOffice.Core.SeatingChart.create!("main chart")
 
-names =
-  for alpha <- ?A..?G, numb <- 1..10 do
-    to_string([alpha]) <> to_string(numb)
-  end
-  |> Enum.map(fn name -> %{name: name} end)
+  names =
+    for alpha <- ?A..?G, numb <- 1..10 do
+      to_string([alpha]) <> to_string(numb)
+    end
+    |> Enum.map(fn name -> %{name: name} end)
 
-seats = BoxOffice.Core.bulk_create!(names, BoxOffice.Core.Seat, :create, return_records?: true)
+  seats = BoxOffice.Core.bulk_create!(names, BoxOffice.Core.Seat, :create, return_records?: true)
 
-seats.records
-|> Enum.map(fn seat ->
-  BoxOffice.Core.SeatingChart.add_seat!(seating_chart, seat.id)
-end)
+  seats.records
+  |> Enum.map(fn seat ->
+    BoxOffice.Core.SeatingChart.add_seat!(seating_chart, seat.id)
+  end)
 
-production = BoxOffice.Core.Production.create!("A Funny Thing Happened on the Way to the Forum")
+  production = BoxOffice.Core.Production.create!("A Funny Thing Happened on the Way to the Forum")
 
-date = DateTime.from_naive!(~N[2024-01-01 20:00:00], "America/Chicago")
+  date = DateTime.from_naive!(~N[2024-01-01 20:00:00], "America/Chicago")
 
-performance =
-  BoxOffice.Core.Performance.create!(production.id, date, seating_chart.id)
+  performance =
+    BoxOffice.Core.Performance.create!(production.id, date, seating_chart.id)
 
-reservation = BoxOffice.Core.Reservation.make!(patron.id, performance.id, hd(seats.records).id)
+  BoxOffice.Core.Reservation.make!(patron.id, performance.id, hd(seats.records).id)
+end
 
-:ok
+seed.()
+BoxOffice.Core.Test.reset()
+seed.()
 ```
 
 ## Query
@@ -303,6 +320,12 @@ BoxOffice.Core.load!(reservation.performance, [
   :count_of_reserved_seats,
   :count_of_unreserved_seats
 ])
+```
+
+## Test
+
+```elixir
+# nothing yet...
 ```
 
 ## Storage
