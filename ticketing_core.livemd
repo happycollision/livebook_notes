@@ -271,12 +271,16 @@ require Ash.Query
 
 ## Diagram
 
+<!-- livebook:{"reevaluate_automatically":true} -->
+
 ```elixir
 Ash.Api.Info.Diagram.mermaid_class_diagram(BoxOffice.Core)
 |> Kino.Mermaid.new()
 ```
 
 ## Test Setup
+
+<!-- livebook:{"reevaluate_automatically":true} -->
 
 ```elixir
 defmodule BoxOffice.Core.Test do
@@ -426,7 +430,47 @@ defmodule BoxOfficeFeaturesTest do
   end
 end
 
-ExUnit.run()
+results = ExUnit.run()
+```
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+defmodule Notifications.PushJS do
+  use Kino.JS
+
+  def new(msg) do
+    Kino.JS.new(__MODULE__, msg)
+  end
+
+  asset "main.js" do
+    """
+    import "https://cdn.jsdelivr.net/npm/push.js@1.0.12/bin/push.min.js";
+
+    export function init(ctx, msg) {
+
+      const doMsg = () => Push.create("Results", {body: msg})
+
+      // Enabling notifications requires user interaction, so we render a button if the
+      // user has not previously allowed notifications from the origin for Livebook
+      if (!Push.Permission.has()) {
+        ctx.root.innerHTML = `<button type='button' onclick='Push.Permission.request(doMsg, () => {})'>Push me to allow notifications</button>`;
+        
+        return
+      }
+
+      doMsg()
+    }
+
+    """
+  end
+end
+```
+
+<!-- livebook:{"reevaluate_automatically":true} -->
+
+```elixir
+Notifications.PushJS.new(results |> Map.to_list() |> inspect())
 ```
 
 <!-- livebook:{"branch_parent_index":0} -->
