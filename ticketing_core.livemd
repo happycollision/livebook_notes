@@ -207,6 +207,8 @@ defmodule BoxOffice.Core.Performance do
 end
 
 defmodule BoxOffice.Core.Reservation do
+  require Ash.Query
+
   use Ash.Resource,
     data_layer: Ash.DataLayer.Ets
 
@@ -249,6 +251,23 @@ defmodule BoxOffice.Core.Reservation do
     # pre_check_with might only be necessary for ETS data layer.
     # see https://hexdocs.pm/ash/identities.html#pre-checking
     identity(:reservation_identity, [:seat_id, :performance_id], pre_check_with: BoxOffice.Core)
+  end
+
+  validations do
+    validate(fn changeset ->
+      seat_id = Ash.Changeset.get_attribute(changeset, :seat_id)
+      performance_id = Ash.Changeset.get_attribute(changeset, :performance_id)
+
+      [performance] =
+        BoxOffice.Core.Performance
+        |> Ash.Query.filter(id == ^performance_id)
+        |> BoxOffice.Core.read!()
+        |> dbg
+
+      raise "still working on this..."
+
+      :ok
+    end)
   end
 end
 
@@ -393,6 +412,19 @@ defmodule BoxOfficeFeaturesTest do
 
       assert {:ok, _} =
                BoxOffice.Core.Reservation.make(create_patron().id, performance.id, seat.id)
+
+      assert {:error, _} =
+               BoxOffice.Core.Reservation.make(create_patron().id, performance.id, seat.id)
+    end
+
+    test "a seat outside the performance's chart is not valid when reserving" do
+      create_seating_chart()
+      create_seats()
+      populate_seating_chart()
+      create_production()
+      performance = create_performance()
+
+      [seat] = create_seats(["Z99"]).records
 
       assert {:error, _} =
                BoxOffice.Core.Reservation.make(create_patron().id, performance.id, seat.id)
