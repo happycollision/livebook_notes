@@ -244,6 +244,12 @@ defmodule BoxOffice.Core.Reservation do
 
     define(:make, args: [:patron_id, :performance_id, :seat_id])
   end
+
+  identities do
+    # pre_check_with might only be necessary for ETS data layer.
+    # see https://hexdocs.pm/ash/identities.html#pre-checking
+    identity(:reservation_identity, [:seat_id, :performance_id], pre_check_with: BoxOffice.Core)
+  end
 end
 
 defmodule BoxOffice.Core do
@@ -349,6 +355,8 @@ end
 
 ## Test
 
+<!-- livebook:{"reevaluate_automatically":true} -->
+
 ```elixir
 ExUnit.start(auto_run: false)
 
@@ -369,6 +377,20 @@ defmodule BoxOfficeFeaturesTest do
       performance = create_performance()
 
       assert {:ok, _} =
+               BoxOffice.Core.Reservation.make(create_patron().id, performance.id, seat.id)
+    end
+
+    test "a reserved seat cannot be reserved again" do
+      create_seating_chart()
+      [seat] = create_seats().records
+      populate_seating_chart()
+      create_production()
+      performance = create_performance()
+
+      assert {:ok, _} =
+               BoxOffice.Core.Reservation.make(create_patron().id, performance.id, seat.id)
+
+      assert {:error, _} =
                BoxOffice.Core.Reservation.make(create_patron().id, performance.id, seat.id)
     end
 
@@ -406,6 +428,8 @@ end
 
 ExUnit.run()
 ```
+
+<!-- livebook:{"branch_parent_index":0} -->
 
 ## Play with the resources
 
