@@ -24,6 +24,9 @@ defmodule BoxOffice.Core.Patron do
   attributes do
     uuid_primary_key(:id)
     attribute(:name, :string)
+
+    create_timestamp(:created_at)
+    update_timestamp(:updated_at)
   end
 
   # Added the inverse relationship of belongs_to in the reservation.
@@ -53,6 +56,9 @@ defmodule BoxOffice.Core.Seat do
   attributes do
     uuid_primary_key(:id)
     attribute(:name, :string)
+
+    create_timestamp(:created_at)
+    update_timestamp(:updated_at)
   end
 
   relationships do
@@ -103,6 +109,9 @@ defmodule BoxOffice.Core.SeatingChart do
   attributes do
     uuid_primary_key(:id)
     attribute(:name, :string)
+
+    create_timestamp(:created_at)
+    update_timestamp(:updated_at)
   end
 
   relationships do
@@ -251,21 +260,154 @@ defmodule BoxOffice.Core do
   end
 end
 
-defmodule BoxOffice.Core.Test do
-  def reset() do
-    BoxOffice.Core
-    |> Ash.Api.Info.resources()
-    |> Enum.each(fn resource -> :ets.delete_all_objects(resource) end)
-  end
-end
+require Ash.Query
 ```
+
+## Diagram
 
 ```elixir
 Ash.Api.Info.Diagram.mermaid_class_diagram(BoxOffice.Core)
 |> Kino.Mermaid.new()
 ```
 
-## Seed
+## Test Setup
+
+```elixir
+defmodule BoxOffice.Core.Test do
+  def reset() do
+    BoxOffice.Core
+    |> Ash.Api.Info.resources()
+    |> Enum.reject(fn resource -> :ets.whereis(resource) == :undefined end)
+    |> Enum.each(fn resource -> :ets.delete_all_objects(resource) end)
+  end
+
+  def create_patron(name \\ "Sally") do
+    BoxOffice.Core.Patron.create!(name)
+  end
+
+  def create_production(name \\ "Some Great Show") do
+    BoxOffice.Core.Production.create!(name)
+  end
+
+  def create_seating_chart(name \\ "main chart") do
+    BoxOffice.Core.SeatingChart.create!(name)
+  end
+
+  def create_seats(names \\ ["A1"]) when is_list(names) do
+    names
+    |> Enum.map(fn name -> %{name: name} end)
+    |> BoxOffice.Core.bulk_create!(BoxOffice.Core.Seat, :create, return_records?: true)
+  end
+
+  def create_performance(date \\ DateTime.from_naive!(~N[2024-01-01 20:00:00], "America/Chicago")) do
+    [production] =
+      BoxOffice.Core.Production
+      |> Ash.Query.sort(created_at: :desc)
+      |> Ash.Query.limit(1)
+      |> BoxOffice.Core.read!()
+
+    [seating_chart] =
+      BoxOffice.Core.SeatingChart
+      |> Ash.Query.sort(created_at: :desc)
+      |> Ash.Query.limit(1)
+      |> BoxOffice.Core.read!()
+
+    create_performance(production, seating_chart, date)
+  end
+
+  def create_performance(
+        production,
+        seating_chart,
+        date \\ DateTime.from_naive!(~N[2024-01-01 20:00:00], "America/Chicago")
+      ) do
+    BoxOffice.Core.Performance.create!(production.id, date, seating_chart.id)
+  end
+
+  def populate_seating_chart() do
+    [seating_chart] =
+      BoxOffice.Core.SeatingChart
+      |> Ash.Query.sort(created_at: :desc)
+      |> Ash.Query.limit(1)
+      |> BoxOffice.Core.read!()
+
+    seats =
+      BoxOffice.Core.Seat
+      |> Ash.Query.sort(created_at: :desc)
+      |> BoxOffice.Core.read!()
+
+    populate_seating_chart(seating_chart, seats)
+  end
+
+  def populate_seating_chart(%BoxOffice.Core.SeatingChart{} = seating_chart, seats) do
+    seats
+    |> Enum.map(fn seat ->
+      BoxOffice.Core.SeatingChart.add_seat!(seating_chart, seat.id)
+    end)
+  end
+end
+```
+
+## Test
+
+```elixir
+ExUnit.start(auto_run: false)
+
+defmodule BoxOfficeFeaturesTest do
+  use ExUnit.Case, async: false
+  import BoxOffice.Core.Test
+
+  setup do
+    BoxOffice.Core.Test.reset()
+  end
+
+  describe "Reservations" do
+    test "we can reserve a seat" do
+      create_seating_chart()
+      [seat] = create_seats().records
+      populate_seating_chart()
+      create_production()
+      performance = create_performance()
+
+      assert {:ok, _} =
+               BoxOffice.Core.Reservation.make(create_patron().id, performance.id, seat.id)
+    end
+
+    test "we can see how many reservations exist" do
+      create_seating_chart()
+
+      [seat | _] = create_seats(["1", "2"]).records
+
+      populate_seating_chart()
+      create_production()
+      performance = create_performance()
+
+      performance =
+        BoxOffice.Core.load!(performance, [
+          :count_of_reserved_seats,
+          :count_of_unreserved_seats
+        ])
+
+      assert 0 = performance.count_of_reserved_seats
+      assert 2 = performance.count_of_unreserved_seats
+
+      BoxOffice.Core.Reservation.make(create_patron().id, performance.id, seat.id)
+
+      performance =
+        BoxOffice.Core.load!(performance, [
+          :count_of_reserved_seats,
+          :count_of_unreserved_seats
+        ])
+
+      assert 1 = performance.count_of_reserved_seats
+      assert 1 = performance.count_of_unreserved_seats
+    end
+  end
+end
+
+ExUnit.run()
+```
+
+## Play with the resources
 
 ```elixir
 seed = fn ->
@@ -296,11 +438,7 @@ seed = fn ->
 end
 
 seed.()
-BoxOffice.Core.Test.reset()
-seed.()
 ```
-
-## Query
 
 ```elixir
 require Ash.Query
@@ -320,12 +458,6 @@ BoxOffice.Core.load!(reservation.performance, [
   :count_of_reserved_seats,
   :count_of_unreserved_seats
 ])
-```
-
-## Test
-
-```elixir
-# nothing yet...
 ```
 
 ## Storage
