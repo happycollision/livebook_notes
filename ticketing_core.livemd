@@ -263,7 +263,6 @@ defmodule BoxOffice.Core.Reservation do
         |> Ash.Query.filter(id == ^performance_id)
         |> BoxOffice.Core.read!()
         |> BoxOffice.Core.load!(seating_chart: [:seats])
-        |> dbg
 
       if Enum.any?(performance.seating_chart.seats, fn seat -> seat.id == seat_id end),
         do: :ok,
@@ -461,6 +460,22 @@ defmodule BoxOfficeFeaturesTest do
 
       assert 1 = performance.count_of_reserved_seats
       assert 1 = performance.count_of_unreserved_seats
+    end
+
+    test "we can query a reservation" do
+      create_seating_chart()
+      [seat] = create_seats().records
+      populate_seating_chart()
+      create_production()
+      performance = create_performance()
+
+      assert {:ok, reservation} =
+               BoxOffice.Core.Reservation.make(create_patron().id, performance.id, seat.id)
+
+      assert [_] =
+               BoxOffice.Core.Reservation
+               |> Ash.Query.filter(id == ^reservation.id)
+               |> BoxOffice.Core.read!()
     end
   end
 end
