@@ -262,11 +262,14 @@ defmodule BoxOffice.Core.Reservation do
         BoxOffice.Core.Performance
         |> Ash.Query.filter(id == ^performance_id)
         |> BoxOffice.Core.read!()
+        |> BoxOffice.Core.load!(seating_chart: [:seats])
         |> dbg
 
-      raise "still working on this..."
-
-      :ok
+      if Enum.any?(performance.seating_chart.seats, fn seat -> seat.id == seat_id end),
+        do: :ok,
+        else:
+          {:error,
+           field: :seat_id, message: "The seat does not exist in the performance's seating chart."}
     end)
   end
 end
